@@ -4,7 +4,7 @@
 
 ---
 
-## 📌 1. Project Overview
+## 1. Project Overview
 
 Rapid urbanization and climate change have exacerbated the **Urban Heat Island (UHI)** effect. Traditional navigation applications optimize routes solely for distance and travel time. This system introduces **Heat-Aware Navigation**, predicting microclimate heat exposure along candidate routes and recommending **Cool Routes** that mitigate thermal stress for pedestrians, cyclists, and commuters.
 
@@ -12,7 +12,7 @@ Initially focused around **SRM University (Kattankulathur) / Chennai**, the plat
 
 ---
 
-## 🚨 2. Problem Statement
+## 2. Problem Statement
 
 Navigating through urban heat corridors increases risk of heat stroke, fatigue, and UV damage. Standard routing engines direct travelers through high-density urban areas with heavy asphalt paving and minimal tree canopy. 
 
@@ -20,18 +20,18 @@ By integrating environmental parameters (**Temperature, Humidity, UV Index, Vege
 
 ---
 
-## ✨ 3. Core Features
+## 3. Core Features
 
-- 🗺️ **Interactive OpenStreetMap Visualization**: Leaflet map centered on SRM Kattankulathur / Chennai with live markers, route polylines, and heat zone overlays.
-- 🌲 **Cool Route Scoring Engine**: Recommends routes using a multi-objective formula:
+-  **Interactive OpenStreetMap Visualization**: Leaflet map centered on SRM Kattankulathur / Chennai with live markers, route polylines, and heat zone overlays.
+-  **Cool Route Scoring Engine**: Recommends routes using a multi-objective formula:
   $$\text{Score} = 0.25 \times \text{Distance}_{\text{norm}} + 0.25 \times \text{Duration}_{\text{norm}} + 0.50 \times \text{HeatRisk}_{\text{norm}}$$
-- 🤖 **Random Forest ML Heat Risk Model**: Predicts heat risk (0–100) and risk levels (`LOW`, `MODERATE`, `HIGH`, `EXTREME`).
-- 🗄️ **PostgreSQL + PostGIS & SQLite Fallback**: Spatial database support with an automatic zero-config fallback.
-- ⚡ **OSRM Integration**: Fetches real OpenStreetMap driving geometries and generates shaded alternative detour routes.
+-  **Random Forest ML Heat Risk Model**: Predicts heat risk (0–100) and risk levels (`LOW`, `MODERATE`, `HIGH`, `EXTREME`).
+- **PostgreSQL + PostGIS & SQLite Fallback**: Spatial database support with an automatic zero-config fallback.
+-  **OSRM Integration**: Fetches real OpenStreetMap driving geometries and generates shaded alternative detour routes.
 
 ---
 
-## 🛠️ 4. Technology Stack
+##  4. Technology Stack
 
 - **Frontend**: React 18, Vite, Leaflet, React-Leaflet, Lucide-React, Axios.
 - **Backend**: Python 3.13, FastAPI, Uvicorn, Pydantic v2.
@@ -41,7 +41,7 @@ By integrating environmental parameters (**Temperature, Humidity, UV Index, Vege
 
 ---
 
-## 🏗️ 5. System Architecture Flow
+##  5. System Architecture Flow
 
 ```mermaid
 graph TD
@@ -61,7 +61,7 @@ graph TD
 
 ---
 
-## 📁 6. Project Structure
+##  6. Project Structure
 
 ```text
 urban-heat-route-system/
@@ -125,7 +125,7 @@ urban-heat-route-system/
 
 ---
 
-## ⚙️ 7. Installation & Running Instructions
+##  7. Installation & Running Instructions
 
 ### Step 1: Database Setup (Optional Docker Compose)
 To start PostgreSQL + PostGIS container:
@@ -158,7 +158,7 @@ Open `http://localhost:5173` in your browser.
 
 ---
 
-## 📡 8. API Endpoint Documentation
+##  8. API Endpoint Documentation
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
@@ -210,7 +210,7 @@ Open `http://localhost:5173` in your browser.
 
 ---
 
-## 🖼️ 9. Application Screenshots
+##  9. Application Screenshots
 
 *(Placeholders for prototype visual walkthrough)*
 
@@ -220,8 +220,8 @@ Open `http://localhost:5173` in your browser.
 
 ---
 
-## 🚀 10. Future Enhancements
+##  10. Future Enhancements
 
-- 🛰️ Integration with Sentinel-2 / Landsat Satellite NDVI live imagery APIs.
-- ⏱️ Real-time hourly sun position & building shadow calculation.
-- 🚴 Mode-specific heat risk adjustments (Walking vs. Cycling vs. Driving).
+-  Integration with Sentinel-2 / Landsat Satellite NDVI live imagery APIs.
+-  Real-time hourly sun position & building shadow calculation.
+-  Mode-specific heat risk adjustments (Walking vs. Cycling vs. Driving).
