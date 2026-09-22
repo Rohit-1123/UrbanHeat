@@ -11,7 +11,7 @@ const Footer = ({ onNavigate }) => {
             <span>UrbanHeat</span>
           </div>
           <p className="footer-desc">
-            Smart environmental intelligence & heat monitoring platform to analyze urban heat island impacts, assess microclimate vulnerabilities, and empower climate-resilient cities.
+            Smart environmental intelligence & microclimate monitoring platform to analyze urban heat island impacts, calculate heat risk vulnerability, and discover shaded cool routes.
           </p>
         </div>
 
@@ -19,18 +19,21 @@ const Footer = ({ onNavigate }) => {
           <h4>Platform Navigation</h4>
           <ul>
             <li><button onClick={() => onNavigate('home')}>Home</button></li>
-            <li><button onClick={() => onNavigate('map')}>Urban Heat Map</button></li>
-            <li><button onClick={() => onNavigate('analytics')}>Analytics & Trends</button></li>
-            <li><button onClick={() => onNavigate('risk')}>Risk Assessment</button></li>
+            <li><button onClick={() => onNavigate('map')}>Interactive Heat Map</button></li>
+            <li><button onClick={() => onNavigate('routes')}>Cool Route Finder</button></li>
+            <li><button onClick={() => onNavigate('analytics')}>Analytics & Risk Hub</button></li>
+            <li><button onClick={() => onNavigate('insights')}>Insights & Guide</button></li>
           </ul>
         </div>
 
         <div className="footer-links-col">
-          <h4>Insights & Guidance</h4>
+          <h4>Features & Tools</h4>
           <ul>
-            <li><button onClick={() => onNavigate('recommendations')}>Recommendations</button></li>
-            <li><button onClick={() => onNavigate('learn')}>Learn UHI Science</button></li>
-            <li><button onClick={() => onNavigate('about')}>About Platform</button></li>
+            <li><button onClick={() => onNavigate('routes')}>Shaded Walking Navigation</button></li>
+            <li><button onClick={() => onNavigate('simulator')}>ML Risk Simulator</button></li>
+            <li><button onClick={() => onNavigate('risk')}>Vulnerability Assessment</button></li>
+            <li><button onClick={() => onNavigate('recommendations')}>Cooling Recommendations</button></li>
+            <li><button onClick={() => onNavigate('learn')}>UHI Science & Education</button></li>
           </ul>
         </div>
       </div>

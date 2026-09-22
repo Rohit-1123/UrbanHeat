@@ -1,18 +1,35 @@
 import { MOCK_LOCATIONS, MOCK_HEAT_POINTS, MOCK_TREND_DATA, MOCK_RECOMMENDATIONS } from '../data/mockData';
 import { healthCheck, getHeatmapData, predictHeat } from './api';
+import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 
 export async function fetchLocations() {
-  return MOCK_LOCATIONS;
+  return MOCK_LOCATIONS.filter((location) => (
+    isWithinSrmCampus(
+      location.latitude ?? location.lat,
+      location.longitude ?? location.lon
+    )
+  ));
 }
 
 export async function fetchCurrentHeatData(locationId = 'srm-hub') {
   const found = MOCK_LOCATIONS.find((l) => l.id === locationId);
-  return found || MOCK_LOCATIONS[0];
+  return found || MOCK_LOCATIONS.find((location) => location.id === 'srm-hub') || {
+    id: 'srm-hub',
+    city: 'SRM Kattankulathur',
+    area: 'SRM Institute campus',
+    latitude: SRM_CAMPUS.center[0],
+    longitude: SRM_CAMPUS.center[1]
+  };
 }
 
 export async function fetchHeatPoints() {
   try {
-    const livePoints = await getHeatmapData();
+    const livePoints = await getHeatmapData({
+      min_lat: SRM_CAMPUS.bounds[0][0],
+      max_lat: SRM_CAMPUS.bounds[1][0],
+      min_lon: SRM_CAMPUS.bounds[0][1],
+      max_lon: SRM_CAMPUS.bounds[1][1]
+    });
     if (livePoints && livePoints.length > 0) {
       return livePoints.map((pt, idx) => {
         const heatRisk = pt.heat_risk || pt.heatRiskScore || 50;
@@ -51,7 +68,7 @@ export async function fetchHeatPoints() {
   } catch (err) {
     console.warn('Backend heatmap endpoint offline, using mock heat points:', err);
   }
-  return MOCK_HEAT_POINTS;
+  return MOCK_HEAT_POINTS.filter((point) => isWithinSrmCampus(point.latitude, point.longitude));
 }
 
 export async function fetchTrendData(range = 'today') {

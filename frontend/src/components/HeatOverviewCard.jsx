@@ -12,7 +12,13 @@ const HeatOverviewCard = ({ locationData, onNavigate }) => {
     recommendedAction: 'Stay hydrated and limit prolonged outdoor exposure between 12 PM and 4 PM.'
   };
 
-  const riskColor = getRiskColor(data.heatRiskScore);
+  const temperature = data.temperature ?? 34;
+  const feelsLike = data.feelsLike ?? (temperature + 5);
+  const heatRiskScore = data.heatRiskScore ?? data.heat_risk ?? 50;
+  const riskLevel = data.riskLevel ?? data.risk_level ?? 'Moderate';
+  const hottestZone = data.hottestZone ?? data.area ?? 'Selected SRM Campus Place';
+  const recommendedAction = data.recommendedAction ?? 'Use shaded campus paths and maintain regular hydration.';
+  const riskColor = getRiskColor(heatRiskScore);
 
   return (
     <div className="overview-cards-grid">
@@ -25,8 +31,8 @@ const HeatOverviewCard = ({ locationData, onNavigate }) => {
           <span className="card-link-hint">Analytics <ChevronRight size={14} /></span>
         </div>
         <div className="card-main-val">
-          <span className="val-number">{data.temperature}°C</span>
-          <span className="val-sub">Feels Like {data.feelsLike}°C</span>
+          <span className="val-number">{temperature}°C</span>
+          <span className="val-sub">Feels Like {feelsLike}°C</span>
         </div>
         <div className="card-label">Current Temperature</div>
       </div>
@@ -41,9 +47,9 @@ const HeatOverviewCard = ({ locationData, onNavigate }) => {
         </div>
         <div className="card-main-val">
           <span className="risk-level-tag" style={{ backgroundColor: `${riskColor}20`, color: riskColor, borderColor: `${riskColor}40` }}>
-            {data.riskLevel} Risk
+            {riskLevel} Risk
           </span>
-          <span className="val-sub">Score {data.heatRiskScore}/100</span>
+          <span className="val-sub">Score {heatRiskScore}/100</span>
         </div>
         <div className="card-label">Heat Risk Status</div>
       </div>
@@ -57,7 +63,7 @@ const HeatOverviewCard = ({ locationData, onNavigate }) => {
           <span className="card-link-hint">View Map <ChevronRight size={14} /></span>
         </div>
         <div className="card-main-val">
-          <span className="val-title-sm">{data.hottestZone}</span>
+          <span className="val-title-sm">{hottestZone}</span>
           <span className="val-sub">Highest localized thermal intensity</span>
         </div>
         <div className="card-label">Hottest Urban Zone</div>
@@ -72,7 +78,7 @@ const HeatOverviewCard = ({ locationData, onNavigate }) => {
           <span className="card-link-hint">Actions <ChevronRight size={14} /></span>
         </div>
         <div className="card-main-val">
-          <p className="val-text-desc">{data.recommendedAction}</p>
+            <p className="val-text-desc">{recommendedAction}</p>
         </div>
         <div className="card-label">Primary Safety Action</div>
       </div>

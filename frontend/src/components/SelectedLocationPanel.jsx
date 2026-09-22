@@ -33,7 +33,7 @@ const SelectedLocationPanel = ({
   }
 
   const name = location.area || location.name || 'Selected Location';
-  const city = location.city || 'Chennai';
+  const city = location.city || 'SRM Kattankulathur';
   const zoneType = location.zoneType || 'Urban Microclimate Zone';
   const temp = location.temperature ?? 34;
   const feelsLike = location.feelsLike ?? (temp + 5);

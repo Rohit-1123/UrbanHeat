@@ -1,0 +1,18 @@
+{
+  "name": "UrbanHeat Intelligence & Cool Routing",
+  "short_name": "UrbanHeat",
+  "description": "Smart environmental intelligence, urban heat island monitoring, and shade-optimized cool routing.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

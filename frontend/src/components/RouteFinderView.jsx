@@ -1,8 +1,28 @@
-import React, { useState } from 'react';
-import { MapPin, Navigation, ArrowUpDown, Target, Sparkles, Loader2, Leaf, Shield, Zap, CheckCircle, X, Compass, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  MapPin,
+  Navigation,
+  ArrowUpDown,
+  Target,
+  Sparkles,
+  Loader2,
+  Leaf,
+  Shield,
+  Zap,
+  CheckCircle,
+  X,
+  Compass,
+  ChevronRight,
+  Sun,
+  Clock,
+  Footprints,
+  SlidersHorizontal,
+  Info
+} from 'lucide-react';
 import MapView from './MapView';
 import HeatProfileChart from './HeatProfileChart';
 import ArcGauge from './ArcGauge';
+import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 
 const RouteFinderView = ({
   startCoords,
@@ -14,20 +34,27 @@ const RouteFinderView = ({
   onSelectRouteType,
   onSearch,
   onUseLocation,
-  onSelectPreset
+  onSelectPreset,
+  onOutsideCampusClick
 }) => {
-  const [startLat, setStartLat] = useState(startCoords.lat.toString());
-  const [startLon, setStartLon] = useState(startCoords.lon.toString());
-  const [endLat, setEndLat] = useState(endCoords.lat.toString());
-  const [endLon, setEndLon] = useState(endCoords.lon.toString());
+  const [startLat, setStartLat] = useState(startCoords?.lat?.toString() || '12.8232');
+  const [startLon, setStartLon] = useState(startCoords?.lon?.toString() || '80.0450');
+  const [endLat, setEndLat] = useState(endCoords?.lat?.toString() || '12.8246527');
+  const [endLon, setEndLon] = useState(endCoords?.lon?.toString() || '80.0452877');
   const [clickMode, setClickMode] = useState('end'); // 'start' | 'end'
   const [showNavModal, setShowNavModal] = useState(false);
 
-  const presets = [
-    { name: 'SRM Main Gate → Kattankulathur Station', start: { lat: 12.8232, lon: 80.0450 }, end: { lat: 12.8265, lon: 80.0382 } },
-    { name: 'Potheri Lake → SRM Tech Park', start: { lat: 12.8125, lon: 80.0350 }, end: { lat: 12.8240, lon: 80.0485 } },
-    { name: 'Estancia IT Park → Guduvancheri Junction', start: { lat: 12.8350, lon: 80.0550 }, end: { lat: 12.8480, lon: 80.0620 } }
-  ];
+  useEffect(() => {
+    setStartLat(startCoords?.lat?.toString() || '');
+    setStartLon(startCoords?.lon?.toString() || '');
+  }, [startCoords]);
+
+  useEffect(() => {
+    setEndLat(endCoords?.lat?.toString() || '');
+    setEndLon(endCoords?.lon?.toString() || '');
+  }, [endCoords]);
+
+  const presets = SRM_CAMPUS.landmarks;
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
@@ -56,6 +83,9 @@ const RouteFinderView = ({
   };
 
   const handleMapClick = (coords) => {
+    if (!isWithinSrmCampus(coords.lat, coords.lon)) {
+      return;
+    }
     if (clickMode === 'start') {
       setStartLat(coords.lat.toFixed(4));
       setStartLon(coords.lon.toFixed(4));
@@ -77,15 +107,30 @@ const RouteFinderView = ({
     }
   };
 
+  const handleOutsideCampusClick = () => {
+    onOutsideCampusClick?.();
+  };
+
   const happiest = routesData?.coolest_route || {
-    route_name: 'Coolest Route',
+    route_name: 'Coolest Route (Shaded Canopy)',
     duration_minutes: 15,
     distance_km: 2.4,
     average_heat_risk: 34,
     maximum_heat_risk: 48,
     heat_risk_level: 'Low',
-    shaded_area_percentage: 72,
-    heat_profile: []
+    shaded_area_percentage: 76,
+    heat_profile: [
+      { distance: 0, heat_risk: 28 },
+      { distance: 0.8, heat_risk: 24 },
+      { distance: 1.6, heat_risk: 36 },
+      { distance: 2.4, heat_risk: 32 }
+    ],
+    turn_by_turn: [
+      { instruction: 'Start from origin and head toward the shaded pedestrian sidewalk.', distance: '200m' },
+      { instruction: 'Continue along the tree-lined campus boulevard (76% canopy cover).', distance: '650m' },
+      { instruction: 'Walk through the green park corridor to bypass asphalt heat radiation.', distance: '450m' },
+      { instruction: 'Arrive at destination safely with reduced thermal exposure.', distance: '100m' }
+    ]
   };
 
   const balanced = routesData?.balanced_route || {
@@ -96,300 +141,423 @@ const RouteFinderView = ({
     maximum_heat_risk: 68,
     heat_risk_level: 'Moderate',
     shaded_area_percentage: 48,
-    heat_profile: []
+    heat_profile: [
+      { distance: 0, heat_risk: 50 },
+      { distance: 1.0, heat_risk: 58 },
+      { distance: 2.1, heat_risk: 54 }
+    ],
+    turn_by_turn: [
+      { instruction: 'Head east on secondary arterial lane.', distance: '500m' },
+      { instruction: 'Take the pedestrian bridge to destination.', distance: '300m' }
+    ]
   };
 
   const fastest = routesData?.fastest_route || {
-    route_name: 'Fastest Route',
+    route_name: 'Fastest Direct Route (High Sun Exposure)',
     duration_minutes: 10,
     distance_km: 1.8,
     average_heat_risk: 78,
-    maximum_heat_risk: 85,
+    maximum_heat_risk: 86,
     heat_risk_level: 'High',
-    shaded_area_percentage: 23,
-    heat_profile: []
+    shaded_area_percentage: 18,
+    heat_profile: [
+      { distance: 0, heat_risk: 74 },
+      { distance: 0.9, heat_risk: 84 },
+      { distance: 1.8, heat_risk: 78 }
+    ],
+    turn_by_turn: [
+      { instruction: 'Proceed directly down the main unshaded vehicular highway.', distance: '800m' },
+      { instruction: 'Continue on open pavement with direct solar radiation.', distance: '600m' }
+    ]
   };
 
-  const getActiveRoute = (type) => type === 'coolest' ? happiest : type === 'balanced' ? balanced : fastest;
+  const getActiveRoute = (type) => (type === 'coolest' ? happiest : type === 'balanced' ? balanced : fastest);
   const activeRoute = getActiveRoute(selectedRouteType);
 
+  const handleRouteCardKeyDown = (event, routeType) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelectRouteType(routeType);
+    }
+  };
+
+  const reductionPct = fastest.average_heat_risk > 0
+    ? Math.max(0, Math.round(((fastest.average_heat_risk - happiest.average_heat_risk) / fastest.average_heat_risk) * 100))
+    : 0;
+  const recommendedRoute = routesData?.recommended_route || 'coolest_route';
+  const sameMappedPath = routesData?.comparison?.alternatives_available === false;
+
   return (
-    <div className="view-container split-view">
-      {/* Left Control & Route Selection Panel */}
-      <div className="side-panel">
-        <div className="section-card">
-          <div className="section-card-title">
-            <Navigation size={18} className="text-emerald" />
-            <span>Search Cool Routes</span>
+    <div className="route-finder-container">
+      {/* Top Banner Notice */}
+      <div className="route-highlight-banner">
+        <div className="banner-left">
+          <div className="banner-icon-badge">
+            <Leaf size={20} className="text-emerald" />
           </div>
-
-          {/* Preset Selector */}
-          <div className="preset-row">
-            <span className="label-sm">Presets:</span>
-            <select
-              className="select-light"
-              onChange={(e) => {
-                const selected = presets[e.target.value];
-                if (selected) {
-                  setStartLat(selected.start.lat.toString());
-                  setStartLon(selected.start.lon.toString());
-                  setEndLat(selected.end.lat.toString());
-                  setEndLon(selected.end.lon.toString());
-                  onSelectPreset(selected);
-                }
-              }}
-            >
-              {presets.map((p, idx) => (
-                <option key={idx} value={idx}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <form onSubmit={handleSubmit} className="form-clean">
-            <div className="input-field-group">
-              <div className="field-header">
-                <span className="field-label green">🟢 Start Location</span>
-                <button type="button" className="btn-link" onClick={onUseLocation}>
-                  <Target size={12} /> My Location
-                </button>
-              </div>
-              <div className="coord-input-row">
-                <MapPin size={16} className="text-emerald" />
-                <input
-                  type="number"
-                  step="any"
-                  className="input-light"
-                  placeholder="Lat"
-                  value={startLat}
-                  onChange={(e) => setStartLat(e.target.value)}
-                  required
-                />
-                <span className="sep">,</span>
-                <input
-                  type="number"
-                  step="any"
-                  className="input-light"
-                  placeholder="Lon"
-                  value={startLon}
-                  onChange={(e) => setStartLon(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="swap-center">
-              <button type="button" className="btn-swap-light" onClick={handleSwap}>
-                <ArrowUpDown size={13} /> Swap
-              </button>
-            </div>
-
-            <div className="input-field-group">
-              <div className="field-header">
-                <span className="field-label red">🔴 Destination</span>
-              </div>
-              <div className="coord-input-row">
-                <MapPin size={16} className="text-red" />
-                <input
-                  type="number"
-                  step="any"
-                  className="input-light"
-                  placeholder="Lat"
-                  value={endLat}
-                  onChange={(e) => setEndLat(e.target.value)}
-                  required
-                />
-                <span className="sep">,</span>
-                <input
-                  type="number"
-                  step="any"
-                  className="input-light"
-                  placeholder="Lon"
-                  value={endLon}
-                  onChange={(e) => setEndLon(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="map-picker-toggle">
-              <span className="label-sm">Click map sets:</span>
-              <button
-                type="button"
-                className={`btn-mode-toggle ${clickMode === 'start' ? 'active-green' : ''}`}
-                onClick={() => setClickMode('start')}
-              >
-                Start Point
-              </button>
-              <button
-                type="button"
-                className={`btn-mode-toggle ${clickMode === 'end' ? 'active-red' : ''}`}
-                onClick={() => setClickMode('end')}
-              >
-                Destination
-              </button>
-            </div>
-
-            <button type="submit" className="btn-primary-emerald" disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Computing Routes...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  Find Coolest Route
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* Route Cards */}
-        <div className="routes-list">
-          <h3 className="subheading-light">Route Recommendations</h3>
-
-          {/* Coolest Route */}
-          <div
-            className={`route-card-light coolest ${selectedRouteType === 'coolest' ? 'active' : ''}`}
-            onClick={() => onSelectRouteType('coolest')}
-          >
-            <div className="card-top">
-              <div className="card-title-row">
-                <Leaf size={16} className="text-emerald" />
-                <span className="route-name green">Coolest Route</span>
-              </div>
-              <span className="badge-green"><CheckCircle size={11} /> Recommended</span>
-            </div>
-            <div className="stats-row">
-              <div><strong>⏱️ {happiest.duration_minutes} min</strong></div>
-              <div>🛣️ {happiest.distance_km} km</div>
-              <div className="text-emerald"><strong>🌡️ {happiest.average_heat_risk}/100 Risk</strong></div>
-              <div className="text-emerald">🍃 {happiest.shaded_area_percentage}% Shade</div>
-            </div>
-          </div>
-
-          {/* Balanced Route */}
-          <div
-            className={`route-card-light balanced ${selectedRouteType === 'balanced' ? 'active' : ''}`}
-            onClick={() => onSelectRouteType('balanced')}
-          >
-            <div className="card-top">
-              <div className="card-title-row">
-                <Shield size={16} className="text-blue" />
-                <span className="route-name blue">Balanced Route</span>
-              </div>
-            </div>
-            <div className="stats-row">
-              <div><strong>⏱️ {balanced.duration_minutes} min</strong></div>
-              <div>🛣️ {balanced.distance_km} km</div>
-              <div className="text-blue"><strong>🌡️ {balanced.average_heat_risk}/100 Risk</strong></div>
-              <div className="text-blue">🍃 {balanced.shaded_area_percentage}% Shade</div>
-            </div>
-          </div>
-
-          {/* Fastest Route */}
-          <div
-            className={`route-card-light fastest ${selectedRouteType === 'fastest' ? 'active' : ''}`}
-            onClick={() => onSelectRouteType('fastest')}
-          >
-            <div className="card-top">
-              <div className="card-title-row">
-                <Zap size={16} className="text-red" />
-                <span className="route-name red">Fastest Route</span>
-              </div>
-            </div>
-            <div className="stats-row">
-              <div><strong>⏱️ {fastest.duration_minutes} min</strong></div>
-              <div>🛣️ {fastest.distance_km} km</div>
-              <div className="text-red"><strong>🌡️ {fastest.average_heat_risk}/100 Risk</strong></div>
-              <div className="text-red">🍃 {fastest.shaded_area_percentage}% Shade</div>
-            </div>
+          <div>
+            <h3>Thermal-Aware Smart Walking Routing</h3>
+            <p>
+              Cool Routes prioritize tree canopies, covered colonnades, and green spaces to minimize direct UV radiation and land surface heat absorption.
+            </p>
           </div>
         </div>
-
-        {/* Heat Risk Meter & Profile */}
-        <div className="section-card">
-          <div className="gauge-profile-row">
-            <ArcGauge score={activeRoute.average_heat_risk} />
-            <div className="profile-chart-box">
-              <div className="section-card-title">
-                <span>Thermal Stress Profile</span>
-              </div>
-              <HeatProfileChart
-                profile={activeRoute.heat_profile}
-                color={selectedRouteType === 'coolest' ? '#10b981' : selectedRouteType === 'balanced' ? '#3b82f6' : '#ef4444'}
-                height={80}
-              />
-            </div>
-          </div>
+        <div className="banner-savings-tag">
+          <span className="savings-val">~{reductionPct}%</span>
+          <span className="savings-lbl">Less Heat Exposure</span>
         </div>
-
-        {/* Navigation Action Button */}
-        <button
-          className="btn-start-nav-emerald"
-          onClick={() => setShowNavModal(true)}
-        >
-          <Navigation size={16} />
-          Start Turn-by-Turn Navigation
-        </button>
       </div>
 
-      {/* Main Map Display Area */}
-      <div className="main-map-area">
-        {error && <div className="error-alert-light">{error}</div>}
-        <MapView
-          startCoords={startCoords}
-          endCoords={endCoords}
-          routes={routesData}
-          selectedRouteType={selectedRouteType}
-          onMapClick={handleMapClick}
-        />
+      <div className="route-split-layout">
+        {/* Left Control Panel */}
+        <div className="route-control-sidebar">
+          {/* Preset Quick Chooser */}
+          <div className="route-card-block">
+            <div className="block-header">
+              <Compass size={16} className="text-emerald" />
+              <span>SRM Campus Routes</span>
+            </div>
+            <div className="preset-pill-list">
+              {presets.map((preset, idx) => (
+                <button
+                  key={idx}
+                  className="preset-pill-btn"
+                  onClick={() => {
+                    setStartLat(preset.start.lat.toString());
+                    setStartLon(preset.start.lon.toString());
+                    setEndLat(preset.end.lat.toString());
+                    setEndLon(preset.end.lon.toString());
+                    onSelectPreset(preset);
+                  }}
+                >
+                  <MapPin size={12} className="text-emerald" />
+                  <span>{preset.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Coordinates & Location Form */}
+          <div className="route-card-block">
+            <div className="block-header">
+              <Navigation size={16} className="text-emerald" />
+              <span>Waypoints & Locations</span>
+            </div>
+
+            <form onSubmit={handleSubmit} className="route-form">
+              {/* Origin */}
+              <div className="waypoint-input-group">
+                <div className="waypoint-header">
+                  <span className="waypoint-label green">
+                    <span className="dot green" /> Start Location (Origin)
+                  </span>
+                  <button type="button" className="btn-use-gps" onClick={() => onUseLocation('start')}>
+                    <Target size={12} /> My GPS
+                  </button>
+                </div>
+                <div className="coord-inputs">
+                  <input
+                    type="number"
+                    step="any"
+                    className="input-coord"
+                    placeholder="Latitude"
+                    value={startLat}
+                    onChange={(e) => setStartLat(e.target.value)}
+                    required
+                  />
+                  <input
+                    type="number"
+                    step="any"
+                    className="input-coord"
+                    placeholder="Longitude"
+                    value={startLon}
+                    onChange={(e) => setStartLon(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Swap Button */}
+              <div className="swap-row">
+                <button type="button" className="btn-swap-coords" onClick={handleSwap} title="Swap Start & End">
+                  <ArrowUpDown size={14} />
+                  <span>Swap Direction</span>
+                </button>
+              </div>
+
+              {/* Destination */}
+              <div className="waypoint-input-group">
+                <div className="waypoint-header">
+                  <span className="waypoint-label red">
+                    <span className="dot red" /> Destination Point
+                  </span>
+                  <button type="button" className="btn-use-gps" onClick={() => onUseLocation('end')}>
+                    <Target size={12} /> My GPS
+                  </button>
+                </div>
+                <div className="coord-inputs">
+                  <input
+                    type="number"
+                    step="any"
+                    className="input-coord"
+                    placeholder="Latitude"
+                    value={endLat}
+                    onChange={(e) => setEndLat(e.target.value)}
+                    required
+                  />
+                  <input
+                    type="number"
+                    step="any"
+                    className="input-coord"
+                    placeholder="Longitude"
+                    value={endLon}
+                    onChange={(e) => setEndLon(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Map Tap Mode Selector */}
+              <div className="map-tap-mode-bar">
+                <span className="tap-label">Click map to set:</span>
+                <div className="tap-btn-group">
+                  <button
+                    type="button"
+                    className={`btn-tap-mode ${clickMode === 'start' ? 'active-green' : ''}`}
+                    onClick={() => setClickMode('start')}
+                  >
+                    Start Pin
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-tap-mode ${clickMode === 'end' ? 'active-red' : ''}`}
+                    onClick={() => setClickMode('end')}
+                  >
+                    Destination Pin
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" className="btn-calculate-routes" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Calculating Optimal Paths...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} />
+                    <span>Calculate Cool Routes</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+
+          {/* Route Options Comparison */}
+          <div className="route-card-block">
+            <div className="block-header">
+              <SlidersHorizontal size={16} className="text-emerald" />
+              <span>Compare Route Options</span>
+            </div>
+
+            {routesData?.comparison?.alternatives_available === false && (
+              <p className="route-data-note">One mapped walking path is available for these SRM pins. All three cards use that verified path, with separate cool, peak-risk, and speed values; no alternate road has been invented.</p>
+            )}
+
+            {routesData?.comparison?.pins_snapped && (
+              <p className="route-data-note">Your pin was adjusted to the nearest mapped walking path: {routesData.comparison.start_snap_distance_m}m at the start and {routesData.comparison.end_snap_distance_m}m at the destination.</p>
+            )}
+
+            <div className="routes-comparison-stack">
+              {/* Coolest Route */}
+              <div
+                className={`route-choice-card coolest ${selectedRouteType === 'coolest' ? 'selected' : ''}`}
+                onClick={() => onSelectRouteType('coolest')}
+                onKeyDown={(event) => handleRouteCardKeyDown(event, 'coolest')}
+                role="button"
+                tabIndex={0}
+                aria-pressed={selectedRouteType === 'coolest'}
+              >
+                <div className="choice-top">
+                  <div className="choice-title">
+                    <Leaf size={16} className="text-emerald" />
+                    <strong>Coolest Route (Shaded)</strong>
+                  </div>
+                  {sameMappedPath && <span className="route-same-path-badge">Same mapped path</span>}
+                  {recommendedRoute === 'coolest_route' && <span className="badge-best"><CheckCircle size={11} /> Recommended</span>}
+                </div>
+                <div className="choice-stats">
+                  <span><Clock size={13} /> <strong>{happiest.duration_minutes} min</strong></span>
+                  <span><Navigation size={13} /> {happiest.distance_km} km</span>
+                  <span className="text-emerald"><Sun size={13} /> <strong>{happiest.average_heat_risk}/100 Risk</strong></span>
+                  <span className="text-emerald"><Leaf size={13} /> {happiest.shaded_area_percentage}% Shade</span>
+                </div>
+              </div>
+
+              {/* Balanced Route */}
+              <div
+                className={`route-choice-card balanced ${selectedRouteType === 'balanced' ? 'selected' : ''}`}
+                onClick={() => onSelectRouteType('balanced')}
+                onKeyDown={(event) => handleRouteCardKeyDown(event, 'balanced')}
+                role="button"
+                tabIndex={0}
+                aria-pressed={selectedRouteType === 'balanced'}
+              >
+                <div className="choice-top">
+                  <div className="choice-title">
+                    <Shield size={16} className="text-blue" />
+                    <strong>High-Risk Route</strong>
+                  </div>
+                  {sameMappedPath && <span className="route-same-path-badge">Same mapped path</span>}
+                  {recommendedRoute === 'balanced_route' && <span className="badge-best"><CheckCircle size={11} /> Recommended</span>}
+                </div>
+                <div className="choice-stats">
+                  <span><Clock size={13} /> <strong>{balanced.duration_minutes} min</strong></span>
+                  <span><Navigation size={13} /> {balanced.distance_km} km</span>
+                  <span className="text-blue"><Sun size={13} /> <strong>{balanced.maximum_heat_risk}/100 Peak Risk</strong></span>
+                  <span className="text-blue"><Leaf size={13} /> {balanced.shaded_area_percentage}% Shade</span>
+                </div>
+              </div>
+
+              {/* Fastest Route */}
+              <div
+                className={`route-choice-card fastest ${selectedRouteType === 'fastest' ? 'selected' : ''}`}
+                onClick={() => onSelectRouteType('fastest')}
+                onKeyDown={(event) => handleRouteCardKeyDown(event, 'fastest')}
+                role="button"
+                tabIndex={0}
+                aria-pressed={selectedRouteType === 'fastest'}
+              >
+                <div className="choice-top">
+                  <div className="choice-title">
+                    <Zap size={16} className="text-red" />
+                    <strong>Fastest Route</strong>
+                  </div>
+                  {sameMappedPath && <span className="route-same-path-badge">Same mapped path</span>}
+                  {recommendedRoute === 'fastest_route' && <span className="badge-best"><CheckCircle size={11} /> Recommended</span>}
+                </div>
+                <div className="choice-stats">
+                  <span><Clock size={13} /> <strong>{fastest.duration_minutes} min</strong></span>
+                  <span><Navigation size={13} /> {fastest.distance_km} km</span>
+                  <span className="text-red"><Sun size={13} /> {fastest.average_heat_risk}/100 Risk</span>
+                  <span className="text-red"><Leaf size={13} /> {fastest.shaded_area_percentage}% Shade</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation & Turn-by-Turn Action */}
+          <button className="btn-open-navigation" onClick={() => setShowNavModal(true)}>
+            <Footprints size={18} />
+            <span>View Turn-by-Turn Directions ({activeRoute.route_name})</span>
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* Right Map & Thermal Profile Viewport */}
+        <div className="route-map-viewport">
+          <div className="map-frame-card">
+            <div className="map-frame-header">
+              <div className="frame-meta">
+                <span className="active-route-pill">
+                  Active: <strong>{activeRoute.route_name}</strong>
+                </span>
+                  <span className="frame-hint">
+                    <Info size={13} className="text-muted" /> Tap inside the SRM boundary to place pins
+                </span>
+              </div>
+              <div className="map-legend-pills">
+                <span className="legend-chip green"><span className="dot green" /> Cool Route</span>
+                <span className="legend-chip blue"><span className="dot blue" /> High Risk</span>
+                <span className="legend-chip red"><span className="dot red" /> Direct Sun</span>
+              </div>
+            </div>
+
+            {error && <div className="route-error-banner">{error}</div>}
+
+            <MapView
+              startCoords={startCoords}
+              endCoords={endCoords}
+              routes={routesData}
+              selectedRouteType={selectedRouteType}
+              onMapClick={handleMapClick}
+              onOutsideCampusClick={handleOutsideCampusClick}
+            />
+          </div>
+
+          {/* Thermal Profile & Elevation Chart */}
+          <div className="thermal-profile-card">
+            <div className="profile-header">
+              <div>
+                <h4>Thermal Exposure Profile Along Path</h4>
+                <p>Point-by-point microclimate risk variance over distance travelled</p>
+              </div>
+              <div className="profile-badge-val">
+                Avg Risk: <strong style={{ color: selectedRouteType === 'coolest' ? 'var(--environment)' : selectedRouteType === 'balanced' ? 'var(--info)' : 'var(--danger)' }}>{activeRoute.average_heat_risk}/100</strong>
+              </div>
+            </div>
+
+            <HeatProfileChart
+              profile={activeRoute.heat_profile || []}
+              color={selectedRouteType === 'coolest' ? '#10b981' : selectedRouteType === 'balanced' ? '#3b82f6' : '#ef4444'}
+              height={100}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Turn-by-Turn Navigation Modal */}
       {showNavModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="modal-header">
-              <div className="flex-center gap-2">
+        <div className="modal-backdrop-overlay" onClick={() => setShowNavModal(false)}>
+          <div className="report-modal-dialog nav-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="report-modal-toolbar">
+              <div className="toolbar-left">
                 <Compass size={20} className="text-emerald" />
-                <h3>Navigation Guidance: {activeRoute.route_name}</h3>
+                <span className="toolbar-title">Turn-by-Turn Guidance: {activeRoute.route_name}</span>
               </div>
-              <button className="btn-close-modal" onClick={() => setShowNavModal(false)}>
-                <X size={18} />
+              <button className="btn-modal-close" onClick={() => setShowNavModal(false)}>
+                <X size={20} />
               </button>
             </div>
 
-            <div className="nav-steps-list">
-              <div className="nav-step-item">
-                <div className="step-num green">1</div>
-                <div>
-                  <strong>Head east along shaded walkway</strong>
-                  <p>Distance: 350m | 72% tree canopy shade</p>
+            <div className="nav-modal-body">
+              <div className="nav-summary-strip">
+                <div className="strip-item">
+                  <span className="strip-lbl">Estimated Duration</span>
+                  <span className="strip-val">{activeRoute.duration_minutes} Minutes</span>
+                </div>
+                <div className="strip-item">
+                  <span className="strip-lbl">Walking Distance</span>
+                  <span className="strip-val">{activeRoute.distance_km} km</span>
+                </div>
+                <div className="strip-item">
+                  <span className="strip-lbl">Tree Canopy Coverage</span>
+                  <span className="strip-val text-emerald">{activeRoute.shaded_area_percentage}% Shaded</span>
                 </div>
               </div>
 
-              <div className="nav-step-item">
-                <div className="step-num blue">2</div>
-                <div>
-                  <strong>Turn left past green corridor park</strong>
-                  <p>Avoid direct asphalt pavement heat absorption</p>
-                </div>
+              <div className="turn-steps-container">
+                {(activeRoute.turn_by_turn || [
+                  { instruction: 'Head toward tree-canopied sidewalk', distance: '300m' },
+                  { instruction: 'Follow the green boulevard pathway', distance: '600m' },
+                  { instruction: 'Arrive safely at destination', distance: '100m' }
+                ]).map((step, idx) => (
+                  <div key={idx} className="turn-step-card">
+                    <div className="step-badge-num">{idx + 1}</div>
+                    <div className="step-content">
+                      <p className="step-inst"><strong>{step.instruction}</strong></p>
+                      {step.distance && <span className="step-dist">Segment Distance: {step.distance}</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              <div className="nav-step-item">
-                <div className="step-num green">3</div>
-                <div>
-                  <strong>Continue straight to destination hub</strong>
-                  <p>Arrive in ~{activeRoute.duration_minutes} min with minimal thermal stress</p>
-                </div>
-              </div>
+              <button className="btn-start-walking" onClick={() => setShowNavModal(false)}>
+                <CheckCircle size={18} />
+                <span>Begin Walking Along Cool Route</span>
+              </button>
             </div>
-
-            <button className="btn-primary-emerald" onClick={() => setShowNavModal(false)}>
-              Got It! Start Guidance
-            </button>
           </div>
         </div>
       )}

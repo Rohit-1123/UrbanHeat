@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.schemas.schemas import RouteRequest, RouteRecommendationResponse, RouteHeatDetailRequest
 from app.services.route_service import route_service
+from app.services.campus_config import is_within_srm_campus, route_geometry_is_within_srm_campus
 
 router = APIRouter(prefix="/api", tags=["Routing"])
 
@@ -18,11 +19,19 @@ def recommend_route(data: RouteRequest, db: Session = Depends(get_db)):
             detail="Start location and destination cannot be identical. Please select distinct locations."
         )
 
+    if not is_within_srm_campus(data.start_lat, data.start_lon) or not is_within_srm_campus(data.end_lat, data.end_lon):
+        raise HTTPException(
+            status_code=400,
+            detail="Cool Routes currently supports locations inside the SRM Kattankulathur campus area only."
+        )
+
     try:
         recommendation = route_service.process_and_recommend_routes(
             db, data.start_lat, data.start_lon, data.end_lat, data.end_lon
         )
         return recommendation
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate route recommendations: {str(e)}")
 
@@ -33,6 +42,9 @@ def analyze_route_heat_detail(data: RouteHeatDetailRequest, db: Session = Depend
     """
     if not data.coordinates or len(data.coordinates) < 2:
         raise HTTPException(status_code=400, detail="At least two coordinate points are required.")
+
+    if not route_geometry_is_within_srm_campus(data.coordinates):
+        raise HTTPException(status_code=400, detail="Route heat analysis is limited to the SRM Kattankulathur campus area.")
 
     try:
         analysis = route_service.analyze_route_heat(

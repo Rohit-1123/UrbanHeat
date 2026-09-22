@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Rectangle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 
 // Fix Leaflet default marker icons in React Vite bundle
 delete L.Icon.Default.prototype._getIconUrl;
@@ -33,12 +35,16 @@ const MapAutoRecenter = ({ start, end, routes }) => {
 
   useEffect(() => {
     const points = [];
-    if (start) points.push([start.lat, start.lon]);
-    if (end) points.push([end.lat, end.lon]);
+    if (start && start.lat && start.lon && isWithinSrmCampus(start.lat, start.lon)) points.push([start.lat, start.lon]);
+    if (end && end.lat && end.lon && isWithinSrmCampus(end.lat, end.lon)) points.push([end.lat, end.lon]);
 
-    if (routes?.coolest_route?.geometry) routes.coolest_route.geometry.forEach((pt) => points.push(pt));
-    if (routes?.balanced_route?.geometry) routes.balanced_route.geometry.forEach((pt) => points.push(pt));
-    if (routes?.fastest_route?.geometry) routes.fastest_route.geometry.forEach((pt) => points.push(pt));
+    const cPts = routes?.coolest_route?.geometry || routes?.coolest_route?.coordinates;
+    const bPts = routes?.balanced_route?.geometry || routes?.balanced_route?.coordinates;
+    const fPts = routes?.fastest_route?.geometry || routes?.fastest_route?.coordinates;
+
+    if (cPts) cPts.filter((pt) => isWithinSrmCampus(pt[0], pt[1])).forEach((pt) => points.push(pt));
+    if (bPts) bPts.filter((pt) => isWithinSrmCampus(pt[0], pt[1])).forEach((pt) => points.push(pt));
+    if (fPts) fPts.filter((pt) => isWithinSrmCampus(pt[0], pt[1])).forEach((pt) => points.push(pt));
 
     if (points.length > 0) {
       const bounds = L.latLngBounds(points);
@@ -49,11 +55,13 @@ const MapAutoRecenter = ({ start, end, routes }) => {
   return null;
 };
 
-const MapClickHandler = ({ onMapClick }) => {
+const MapClickHandler = ({ onMapClick, onOutsideCampusClick }) => {
   useMapEvents({
     click(e) {
-      if (onMapClick) {
+      if (isWithinSrmCampus(e.latlng.lat, e.latlng.lng) && onMapClick) {
         onMapClick({ lat: e.latlng.lat, lon: e.latlng.lng });
+      } else if (onOutsideCampusClick) {
+        onOutsideCampusClick();
       }
     }
   });
@@ -73,13 +81,27 @@ const MapView = ({
   endCoords,
   routes,
   selectedRouteType = 'coolest',
-  onMapClick
+  onMapClick,
+  onOutsideCampusClick
 }) => {
-  const defaultCenter = [12.8232, 80.0450]; // SRM Katangulathur center
+  const defaultCenter = SRM_CAMPUS.center;
 
-  const coolestPolyline = routes?.coolest_route?.geometry || [];
-  const balancedPolyline = routes?.balanced_route?.geometry || [];
-  const fastestPolyline = routes?.fastest_route?.geometry || [];
+  const coolestPolyline = routes?.coolest_route?.geometry || routes?.coolest_route?.coordinates || [];
+  const balancedCandidate = routes?.balanced_route?.geometry || routes?.balanced_route?.coordinates || [];
+  const fastestCandidate = routes?.fastest_route?.geometry || routes?.fastest_route?.coordinates || [];
+  const geometryKey = (geometry) => JSON.stringify(geometry);
+  const balancedPolyline = geometryKey(balancedCandidate) === geometryKey(coolestPolyline) ? [] : balancedCandidate;
+  const fastestPolyline = geometryKey(fastestCandidate) === geometryKey(coolestPolyline)
+    || geometryKey(fastestCandidate) === geometryKey(balancedCandidate)
+    ? []
+    : fastestCandidate;
+  const sameMappedPath = routes?.comparison?.alternatives_available === false;
+  const activePathColor = selectedRouteType === 'fastest' ? '#ef4444' : selectedRouteType === 'balanced' ? '#3b82f6' : '#10b981';
+  const activePath = selectedRouteType === 'fastest'
+    ? (fastestCandidate.length > 0 ? fastestCandidate : coolestPolyline)
+    : selectedRouteType === 'balanced'
+      ? (balancedCandidate.length > 0 ? balancedCandidate : coolestPolyline)
+      : coolestPolyline;
 
   return (
     <div className="desktop-map-center-container">
@@ -88,14 +110,30 @@ const MapView = ({
         zoom={13}
         className="leaflet-map-wrapper"
         scrollWheelZoom={true}
+        maxBounds={SRM_CAMPUS.bounds}
+        maxBoundsViscosity={1.0}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
+        <Rectangle
+          bounds={SRM_CAMPUS.bounds}
+          pathOptions={{ color: '#10b981', weight: 2, dashArray: '6 6', fillColor: '#10b981', fillOpacity: 0.04 }}
+        />
+
+        {sameMappedPath && activePath.length > 0 && (
+          <Polyline
+            positions={activePath}
+            pathOptions={{ color: activePathColor, weight: 10, opacity: 0.22, lineCap: 'round' }}
+          />
+        )}
+
         <MapAutoRecenter start={startCoords} end={endCoords} routes={routes} />
-        {onMapClick && <MapClickHandler onMapClick={onMapClick} />}
+        {(onMapClick || onOutsideCampusClick) && (
+          <MapClickHandler onMapClick={onMapClick} onOutsideCampusClick={onOutsideCampusClick} />
+        )}
 
         {/* Spatial Heat Points Overlay */}
         {heatmapPoints && heatmapPoints.map((pt, idx) => (
@@ -149,7 +187,7 @@ const MapView = ({
           </Polyline>
         )}
 
-        {/* 2. Balanced Route Polyline (Blue) */}
+        {/* 2. High-risk comparison line (Blue) when a distinct mapped alternative exists */}
         {balancedPolyline.length > 0 && (
           <Polyline
             positions={balancedPolyline}
@@ -160,7 +198,7 @@ const MapView = ({
             }}
           >
             <Popup>
-              <strong style={{ color: '#3b82f6' }}>Balanced Route</strong><br />
+              <strong style={{ color: '#3b82f6' }}>High-Risk Route</strong><br />
               Distance: {routes.balanced_route.distance_km} km<br />
               Duration: {routes.balanced_route.duration_minutes} min<br />
               Heat Risk: {routes.balanced_route.average_heat_risk}/100
@@ -173,9 +211,9 @@ const MapView = ({
           <Polyline
             positions={coolestPolyline}
             pathOptions={{
-              color: '#10b981',
-              weight: selectedRouteType === 'coolest' ? 8 : 4,
-              opacity: selectedRouteType === 'coolest' ? 1.0 : 0.5
+              color: sameMappedPath ? activePathColor : '#10b981',
+              weight: sameMappedPath || selectedRouteType === 'coolest' ? 8 : 4,
+              opacity: sameMappedPath || selectedRouteType === 'coolest' ? 1.0 : 0.5
             }}
           >
             <Popup>
@@ -189,7 +227,7 @@ const MapView = ({
         )}
 
         {/* Start Location Marker */}
-        {startCoords && (
+        {startCoords && isWithinSrmCampus(startCoords.lat, startCoords.lon) && (
           <Marker position={[startCoords.lat, startCoords.lon]} icon={startIcon}>
             <Popup>
               <strong>🟢 Start Location</strong><br />
@@ -199,7 +237,7 @@ const MapView = ({
         )}
 
         {/* Destination Marker */}
-        {endCoords && (
+        {endCoords && isWithinSrmCampus(endCoords.lat, endCoords.lon) && (
           <Marker position={[endCoords.lat, endCoords.lon]} icon={endIcon}>
             <Popup>
               <strong>🔴 Destination</strong><br />

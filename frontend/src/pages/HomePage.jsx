@@ -1,14 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import LocationSearch from '../components/LocationSearch';
 import HeatOverviewCard from '../components/HeatOverviewCard';
-import { MapPin, Database, Cpu, ShieldAlert, Lightbulb, ArrowRight, Sparkles, Map } from 'lucide-react';
+import { MapPin, Database, Cpu, ShieldAlert, Lightbulb, ArrowRight, Sparkles, Map, Loader2 } from 'lucide-react';
+import { fetchLiveWeather } from '../services/weatherService';
 
 const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNavigate }) => {
+  const [syncingWeather, setSyncingWeather] = useState(false);
+
+  const handleSyncWeather = async () => {
+    setSyncingWeather(true);
+    try {
+      const lat = currentLocation?.latitude || 12.8232;
+      const lon = currentLocation?.longitude || 80.0450;
+      const live = await fetchLiveWeather(lat, lon);
+      onSelectLocation({
+        ...currentLocation,
+        ...live,
+        area: currentLocation?.area || 'Local Area',
+        city: currentLocation?.city || 'SRM Kattankulathur'
+      });
+    } finally {
+      setSyncingWeather(false);
+    }
+  };
+
   const steps = [
     {
       num: 1,
       title: 'Select Location',
-      desc: 'Search your city or urban zone to inspect microclimate data.',
+      desc: 'Choose an SRM campus zone to inspect microclimate data.',
       icon: MapPin
     },
     {
@@ -73,8 +93,8 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
       {/* Quick Location Search Section */}
       <section className="section-block">
         <div className="section-header-centered">
-          <h2>Search Your City</h2>
-          <p>Explore microclimate heat conditions and land surface temperatures for any urban area.</p>
+          <h2>Explore SRM Campus</h2>
+          <p>Inspect heat conditions and land surface temperatures across the SRM Institute campus.</p>
         </div>
 
         <LocationSearch
@@ -88,14 +108,42 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
       <section className="section-block">
         <div className="section-header-inline">
           <div>
-            <h2>Current Heat Overview</h2>
+            <div className="section-title-tag-wrap">
+              <h2>Current Heat Overview</h2>
+              {currentLocation?.source && (
+                <span className="source-live-badge">
+                  <span className="live-dot" /> {currentLocation.source}
+                </span>
+              )}
+            </div>
             <p>Summary for <strong>{currentLocation?.area || 'Selected Urban Zone'}</strong> ({currentLocation?.city || 'City'})</p>
           </div>
 
-          <button className="btn-text-link-lg" onClick={() => onNavigate('analytics')}>
-            <span>Detailed Analytics</span>
-            <ArrowRight size={16} />
-          </button>
+          <div className="header-actions-wrap">
+            <button
+              className="btn-sync-live"
+              onClick={handleSyncWeather}
+              disabled={syncingWeather}
+              title="Sync real-time atmospheric data from Open-Meteo"
+            >
+              {syncingWeather ? (
+                <>
+                  <Loader2 size={15} className="animate-spin text-emerald" />
+                  <span>Syncing...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={15} />
+                  <span>Sync Live Weather</span>
+                </>
+              )}
+            </button>
+
+            <button className="btn-text-link-lg" onClick={() => onNavigate('analytics')}>
+              <span>Detailed Analytics</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
         </div>
 
         <HeatOverviewCard locationData={currentLocation} onNavigate={onNavigate} />

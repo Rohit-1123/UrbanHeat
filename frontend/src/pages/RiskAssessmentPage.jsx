@@ -1,14 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { calculateHeatRisk, getRiskColor } from '../utils/riskCalculator';
-import { ShieldAlert, Thermometer, Droplets, TreeDeciduous, Building, Users, Clock, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, Thermometer, Droplets, TreeDeciduous, Building, Users, Clock, AlertTriangle, FileDown, Printer } from 'lucide-react';
+import ExportReportModal from '../components/ExportReportModal';
 
 const RiskAssessmentPage = ({ currentLocation }) => {
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+
   const loc = currentLocation || {
     temperature: 34,
     humidity: 62,
     vegetationIndex: 0.35,
     builtUpDensity: 0.75,
-    area: 'SRM Katangulathur Hub'
+    area: 'SRM Katangulathur Hub',
+    city: 'SRM Kattankulathur'
   };
 
   const riskResult = calculateHeatRisk({
@@ -48,10 +52,23 @@ const RiskAssessmentPage = ({ currentLocation }) => {
 
   return (
     <div className="page-container risk-page">
-      <div className="page-header">
-        <h1 className="page-title">Heat Risk & Health Vulnerability Assessment</h1>
-        <p className="page-subtitle">Evaluation of environmental heat stress, contributing factors, and vulnerable population guidelines for <strong>{loc.area}</strong></p>
+      <div className="page-header-row">
+        <div>
+          <h1 className="page-title">Heat Risk & Health Vulnerability Assessment</h1>
+          <p className="page-subtitle">Evaluation of environmental heat stress, contributing factors, and vulnerable population guidelines for <strong>{loc.area}</strong></p>
+        </div>
+
+        <button className="btn-export-report" onClick={() => setReportModalOpen(true)}>
+          <FileDown size={18} />
+          <span>Export Heat Bulletin</span>
+        </button>
       </div>
+
+      <ExportReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        locationData={loc}
+      />
 
       <div className="risk-grid-layout">
         {/* Heat Risk Score Indicator Card */}

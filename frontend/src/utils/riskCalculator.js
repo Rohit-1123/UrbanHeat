@@ -148,12 +148,12 @@ export function getRiskColor(score) {
  * (e.g. user GPS location or custom map clicks)
  */
 export function estimateMicroclimateForCoords(lat, lon) {
-  // Chennai Geographic anchors
-  const centralLat = 13.0827;
-  const centralLon = 80.2707;
-  const coastLon = 80.2824;
-  const forestLat = 13.0067;
-  const forestLon = 80.2206;
+  // SRM Kattankulathur campus anchors
+  const centralLat = 12.8233;
+  const centralLon = 80.0435;
+  const coastLon = 80.0435;
+  const forestLat = 12.8260;
+  const forestLon = 80.0470;
 
   // Proximity calculations (Euclidean approximate degrees)
   const distToCentral = Math.sqrt((lat - centralLat) ** 2 + (lon - centralLon) ** 2);

@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { MOCK_LOCATIONS } from '../data/mockData';
 import { ArrowLeftRight, CheckCircle2 } from 'lucide-react';
 import { getRiskColor } from '../utils/riskCalculator';
+import { isWithinSrmCampus } from '../config/campus';
 
 const AreaComparison = () => {
-  const [area1Id, setArea1Id] = useState('chennai-central');
-  const [area2Id, setArea2Id] = useState('annanagar-parks');
+  const campusLocations = MOCK_LOCATIONS.filter((location) => isWithinSrmCampus(location.latitude ?? location.lat, location.longitude ?? location.lon));
+  const [area1Id, setArea1Id] = useState(campusLocations[0]?.id);
+  const [area2Id, setArea2Id] = useState(campusLocations[1]?.id || campusLocations[0]?.id);
 
-  const area1 = MOCK_LOCATIONS.find((l) => l.id === area1Id) || MOCK_LOCATIONS[1];
-  const area2 = MOCK_LOCATIONS.find((l) => l.id === area2Id) || MOCK_LOCATIONS[4];
+  const area1 = campusLocations.find((l) => l.id === area1Id) || campusLocations[0];
+  const area2 = campusLocations.find((l) => l.id === area2Id) || campusLocations[1] || campusLocations[0];
 
   const color1 = getRiskColor(area1.heatRiskScore);
   const color2 = getRiskColor(area2.heatRiskScore);
@@ -31,7 +33,7 @@ const AreaComparison = () => {
             value={area1Id}
             onChange={(e) => setArea1Id(e.target.value)}
           >
-            {MOCK_LOCATIONS.map((loc) => (
+            {campusLocations.map((loc) => (
               <option key={loc.id} value={loc.id}>{loc.area}</option>
             ))}
           </select>
@@ -48,7 +50,7 @@ const AreaComparison = () => {
             value={area2Id}
             onChange={(e) => setArea2Id(e.target.value)}
           >
-            {MOCK_LOCATIONS.map((loc) => (
+            {campusLocations.map((loc) => (
               <option key={loc.id} value={loc.id}>{loc.area}</option>
             ))}
           </select>

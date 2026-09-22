@@ -4,15 +4,16 @@ import Footer from './components/Footer';
 
 import HomePage from './pages/HomePage';
 import HeatMapPage from './pages/HeatMapPage';
+import RoutesPage from './pages/RoutesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
-import RiskAssessmentPage from './pages/RiskAssessmentPage';
-import RecommendationsPage from './pages/RecommendationsPage';
-import LearnPage from './pages/LearnPage';
-import AboutPage from './pages/AboutPage';
+import InsightsPage from './pages/InsightsPage';
+import HeatAlertBanner from './components/HeatAlertBanner';
 
-import { fetchLocations, fetchHeatPoints, fetchCurrentHeatData } from './services/heatService';
+import { fetchHeatPoints, fetchCurrentHeatData } from './services/heatService';
+import { getLocationHeatDetail } from './services/api';
 import { estimateMicroclimateForCoords } from './utils/riskCalculator';
 import './App.css';
+import { isWithinSrmCampus } from './config/campus';
 
 const App = () => {
   const [activePage, setActivePage] = useState('home');
@@ -22,6 +23,7 @@ const App = () => {
 
   const [currentLocation, setCurrentLocation] = useState(null);
   const [heatPoints, setHeatPoints] = useState([]);
+  const [locationError, setLocationError] = useState(null);
 
   useEffect(() => {
     const initialize = async () => {
@@ -44,17 +46,56 @@ const App = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const handleSelectLocation = (location) => {
+  const handleSelectLocation = async (location) => {
     setCurrentLocation(location);
+
+    const latitude = location?.latitude ?? location?.lat;
+    const longitude = location?.longitude ?? location?.lon;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+
+    try {
+      const detail = await getLocationHeatDetail(latitude, longitude, location.area || location.name || 'SRM Campus Location');
+      setCurrentLocation((previous) => ({
+        ...previous,
+        ...detail,
+        latitude,
+        longitude,
+        lat: latitude,
+        lon: longitude,
+        area: location.area || location.name || detail.location_name,
+        city: location.city || 'SRM Kattankulathur',
+        heatRiskScore: detail.heat_risk_score,
+        heat_risk: detail.heat_risk_score,
+        riskLevel: detail.risk_level?.replace(/ Heat Risk$/i, ''),
+        risk_level: detail.risk_level?.replace(/ Heat Risk$/i, ''),
+        hottestZone: location.area || location.name || 'Selected SRM Campus Place',
+      }));
+    } catch {
+      const estimated = estimateMicroclimateForCoords(latitude, longitude);
+      setCurrentLocation((previous) => ({
+        ...previous,
+        ...estimated,
+        latitude,
+        longitude,
+        area: location.area || location.name || 'SRM Campus Location',
+        city: location.city || 'SRM Kattankulathur',
+        hottestZone: location.area || location.name || 'Selected SRM Campus Place',
+      }));
+    }
   };
 
   const handleUseMyLocation = () => {
+    setLocationError(null);
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
+      setLocationError('Geolocation is not supported by this browser. Use an SRM campus map pin instead.');
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!isWithinSrmCampus(pos.coords.latitude, pos.coords.longitude)) {
+          setLocationError('Your location is outside the SRM Kattankulathur campus area. Use a pin inside the campus boundary.');
+          return;
+        }
         const estimated = estimateMicroclimateForCoords(pos.coords.latitude, pos.coords.longitude);
         const customLoc = {
           id: 'custom-gps-location',
@@ -69,19 +110,34 @@ const App = () => {
         };
         setCurrentLocation(customLoc);
       },
-      (err) => alert(`Geolocation error: ${err.message}`)
+      (err) => setLocationError(err.code === 1
+        ? 'Location permission was denied. Allow location access in browser settings, or use an SRM campus map pin.'
+        : `Unable to retrieve your location: ${err.message}`)
     );
   };
 
   return (
     <div className="app-root-layout">
-      {/* Top Navigation Bar */}
+      {/* Top Navigation Bar (5 clean topics) */}
       <Navbar
         activePage={activePage}
         onNavigate={setActivePage}
         theme={theme}
         onToggleTheme={handleToggleTheme}
       />
+
+      {/* Dynamic Heat Wave Alert Banner */}
+      <HeatAlertBanner
+        currentLocation={currentLocation}
+        onNavigate={setActivePage}
+      />
+
+      {locationError && (
+        <div className="global-location-error" role="status">
+          <span>{locationError}</span>
+          <button type="button" onClick={() => setLocationError(null)} aria-label="Dismiss location message">Dismiss</button>
+        </div>
+      )}
 
       {/* Main Page View Content */}
       <main className="app-main-viewport">
@@ -105,24 +161,33 @@ const App = () => {
           />
         )}
 
+        {activePage === 'routes' && (
+          <RoutesPage currentLocation={currentLocation} />
+        )}
+
+        {/* Analytics & Risk Hub (Supports 'analytics', 'risk', 'simulator') */}
         {activePage === 'analytics' && (
-          <AnalyticsPage currentLocation={currentLocation} />
+          <AnalyticsPage currentLocation={currentLocation} initialTab="trends" />
         )}
-
         {activePage === 'risk' && (
-          <RiskAssessmentPage currentLocation={currentLocation} />
+          <AnalyticsPage currentLocation={currentLocation} initialTab="risk" />
+        )}
+        {activePage === 'simulator' && (
+          <AnalyticsPage currentLocation={currentLocation} initialTab="simulator" />
         )}
 
+        {/* Insights & Guide Hub (Supports 'insights', 'recommendations', 'learn', 'about') */}
+        {activePage === 'insights' && (
+          <InsightsPage currentLocation={currentLocation} initialTab="recommendations" />
+        )}
         {activePage === 'recommendations' && (
-          <RecommendationsPage currentLocation={currentLocation} />
+          <InsightsPage currentLocation={currentLocation} initialTab="recommendations" />
         )}
-
         {activePage === 'learn' && (
-          <LearnPage />
+          <InsightsPage currentLocation={currentLocation} initialTab="learn" />
         )}
-
         {activePage === 'about' && (
-          <AboutPage />
+          <InsightsPage currentLocation={currentLocation} initialTab="about" />
         )}
       </main>
 

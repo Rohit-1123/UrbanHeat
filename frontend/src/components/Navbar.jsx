@@ -1,23 +1,30 @@
 import React, { useState } from 'react';
-import { Leaf, Menu, X, Sun, Moon, Map, BarChart3, AlertTriangle, ShieldCheck, BookOpen, Info, Home } from 'lucide-react';
+import { Leaf, Menu, X, Home, Map, Navigation, BarChart3, BookOpen } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
 const Navbar = ({ activePage, onNavigate, theme, onToggleTheme }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Minimal, focused top-level topics
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'map', label: 'Heat Map', icon: Map },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'risk', label: 'Risk Assessment', icon: AlertTriangle },
-    { id: 'recommendations', label: 'Recommendations', icon: ShieldCheck },
-    { id: 'learn', label: 'Learn', icon: BookOpen },
-    { id: 'about', label: 'About', icon: Info },
+    { id: 'routes', label: 'Cool Routes', icon: Navigation },
+    { id: 'analytics', label: 'Analytics & Risk', icon: BarChart3 },
+    { id: 'insights', label: 'Insights & Guide', icon: BookOpen },
   ];
 
   const handleNavClick = (id) => {
     onNavigate(id);
     setMobileMenuOpen(false);
+  };
+
+  // Helper to determine if a grouped route is active
+  const isNavActive = (id) => {
+    if (activePage === id) return true;
+    if (id === 'analytics' && (activePage === 'risk' || activePage === 'simulator')) return true;
+    if (id === 'insights' && (activePage === 'recommendations' || activePage === 'learn' || activePage === 'about')) return true;
+    return false;
   };
 
   return (
@@ -34,14 +41,15 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme }) => {
           </div>
         </div>
 
-        {/* Desktop Navigation Links */}
+        {/* Desktop Navigation Links (Clean 5 topics) */}
         <nav className="desktop-nav-menu">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const active = isNavActive(item.id);
             return (
               <button
                 key={item.id}
-                className={`nav-link-btn ${activePage === item.id ? 'active' : ''}`}
+                className={`nav-link-btn ${active ? 'active' : ''}`}
                 onClick={() => handleNavClick(item.id)}
               >
                 <Icon size={16} />
@@ -70,10 +78,11 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme }) => {
         <div className="mobile-nav-drawer">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const active = isNavActive(item.id);
             return (
               <button
                 key={item.id}
-                className={`mobile-nav-link ${activePage === item.id ? 'active' : ''}`}
+                className={`mobile-nav-link ${active ? 'active' : ''}`}
                 onClick={() => handleNavClick(item.id)}
               >
                 <Icon size={18} />

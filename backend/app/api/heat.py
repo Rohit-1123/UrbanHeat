@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+import requests
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -9,8 +10,48 @@ from app.schemas.schemas import (
 )
 from app.services.ml_service import ml_service
 from app.services.heat_service import heat_service
+from app.services.campus_config import SRM_CAMPUS_BOUNDS, is_within_srm_campus
 
 router = APIRouter(prefix="/api", tags=["Heat Analysis"])
+
+@router.get("/location-search")
+def search_campus_locations(
+    q: str = Query(..., min_length=2, max_length=80),
+):
+    """Search mapped SRM campus places through Nominatim, never the wider city."""
+    bounds = SRM_CAMPUS_BOUNDS
+    viewbox = f"{bounds['min_lon']},{bounds['max_lat']},{bounds['max_lon']},{bounds['min_lat']}"
+    try:
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={
+                "q": q,
+                "format": "jsonv2",
+                "addressdetails": 1,
+                "limit": 8,
+                "bounded": 1,
+                "viewbox": viewbox,
+            },
+            headers={"User-Agent": "UrbanHeat-SRM-Campus/1.0"},
+            timeout=8,
+        )
+        response.raise_for_status()
+        results = []
+        for item in response.json():
+            lat = float(item["lat"])
+            lon = float(item["lon"])
+            if is_within_srm_campus(lat, lon):
+                results.append({
+                    "id": f"osm-{item.get('osm_type', 'place')}-{item.get('osm_id', item.get('place_id'))}",
+                    "name": item.get("display_name", "SRM campus location").split(",")[0],
+                    "display_name": item.get("display_name", "SRM campus location"),
+                    "lat": lat,
+                    "lon": lon,
+                    "source": "OpenStreetMap",
+                })
+        return results
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=503, detail=f"Campus location search is temporarily unavailable: {exc}")
 
 @router.post("/predict-heat", response_model=HeatPredictionOutput)
 def predict_heat(data: HeatPredictionInput):
@@ -55,6 +96,12 @@ def get_heatmap_data(
     """
     Returns geographical heat dataset points for interactive heatmap overlays.
     """
+    bounds = SRM_CAMPUS_BOUNDS
+    min_lat = bounds["min_lat"] if min_lat is None else max(min_lat, bounds["min_lat"])
+    max_lat = bounds["max_lat"] if max_lat is None else min(max_lat, bounds["max_lat"])
+    min_lon = bounds["min_lon"] if min_lon is None else max(min_lon, bounds["min_lon"])
+    max_lon = bounds["max_lon"] if max_lon is None else min(max_lon, bounds["max_lon"])
+
     try:
         points = heat_service.get_all_heatmap_points(db, min_lat, max_lat, min_lon, max_lon)
         return points
@@ -66,6 +113,9 @@ def get_location_heat_detail(data: LocationDetailRequest, db: Session = Depends(
     """
     Provides detailed microclimate metrics, gauge score, hourly forecast, and health advisories for any location.
     """
+    if not is_within_srm_campus(data.lat, data.lon):
+        raise HTTPException(status_code=400, detail="Heat analysis is limited to the SRM Kattankulathur campus area.")
+
     try:
         score, risk_level, env = heat_service.evaluate_coordinate_heat_risk(db, data.lat, data.lon)
         score_int = int(round(score))

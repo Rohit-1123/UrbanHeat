@@ -20,6 +20,11 @@ export const getHeatmapData = async (params = {}) => {
   return response.data;
 };
 
+export const searchCampusLocations = async (query) => {
+  const response = await apiClient.get('/api/location-search', { params: { q: query } });
+  return response.data;
+};
+
 export const predictHeat = async (environmentalData) => {
   const response = await apiClient.post('/api/predict-heat', environmentalData);
   return response.data;

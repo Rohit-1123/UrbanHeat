@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sliders, Thermometer, Droplets, TreeDeciduous, Building, Sparkles, Loader2, ShieldCheck } from 'lucide-react';
 import { predictHeat } from '../services/api';
+import { calculateHeatRisk } from '../utils/riskCalculator';
 
 const SimulatorView = () => {
   const [simTemp, setSimTemp] = useState(36);
@@ -26,7 +27,15 @@ const SimulatorView = () => {
       setLivePredictedRisk(res.predicted_heat_risk);
       setLiveRiskLevel(res.risk_level);
     } catch (err) {
-      console.warn('Simulation error:', err);
+      // Offline fallback using NOAA / surface energy balance equations
+      const calc = calculateHeatRisk({
+        temperature: temp,
+        humidity: hum,
+        vegetationIndex: veg,
+        builtUpDensity: bld
+      });
+      setLivePredictedRisk(calc.score);
+      setLiveRiskLevel(calc.riskLevel);
     } finally {
       setSimLoading(false);
     }

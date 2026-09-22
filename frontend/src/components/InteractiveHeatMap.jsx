@@ -5,12 +5,14 @@ import {
   Circle,
   CircleMarker,
   Popup,
+  Rectangle,
   useMap,
   useMapEvents
 } from 'react-leaflet';
 import L from 'leaflet';
 import { Plus, Minus, Maximize2, Crosshair, MapPin } from 'lucide-react';
 import { getRiskColor } from '../utils/riskCalculator';
+import { SRM_CAMPUS } from '../config/campus';
 
 // Fix Leaflet marker icon asset paths
 delete L.Icon.Default.prototype._getIconUrl;
@@ -110,8 +112,8 @@ const InteractiveHeatMap = ({
 }) => {
   const [resetTrigger, setResetTrigger] = React.useState(0);
   const defaultCenter = [
-    centerLocation?.lat || centerLocation?.latitude || 13.0100,
-    centerLocation?.lon || centerLocation?.longitude || 80.2200
+    centerLocation?.lat || centerLocation?.latitude || SRM_CAMPUS.center[0],
+    centerLocation?.lon || centerLocation?.longitude || SRM_CAMPUS.center[1]
   ];
 
   const handleReset = () => {
@@ -193,12 +195,19 @@ const InteractiveHeatMap = ({
         className="leaflet-interactive-map-root"
         zoomControl={false}
         scrollWheelZoom={true}
+        maxBounds={SRM_CAMPUS.bounds}
+        maxBoundsViscosity={1.0}
       >
         <TileLayer
           key={theme} // re-mount tile layer cleanly when theme changes
           url={tileUrl}
           attribution={tileAttribution}
           maxZoom={19}
+        />
+
+        <Rectangle
+          bounds={SRM_CAMPUS.bounds}
+          pathOptions={{ color: '#10b981', weight: 2, dashArray: '6 6', fillColor: '#10b981', fillOpacity: 0.04 }}
         />
 
         {/* Dynamic Navigation & Zoom Controls */}

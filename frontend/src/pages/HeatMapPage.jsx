@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { MOCK_LOCATIONS } from '../data/mockData';
 import { estimateMicroclimateForCoords } from '../utils/riskCalculator';
+import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 
 const HeatMapPage = ({
   currentLocation,
@@ -28,6 +29,7 @@ const HeatMapPage = ({
   const [activeLayer, setActiveLayer] = useState('heat_intensity');
   const [geoError, setGeoError] = useState(null);
   const [centerLoc, setCenterLoc] = useState(currentLocation);
+  const campusLocations = MOCK_LOCATIONS.filter((location) => isWithinSrmCampus(location.latitude ?? location.lat, location.longitude ?? location.lon));
 
   const layers = [
     { id: 'heat_intensity', label: 'Heat Intensity', icon: Flame, desc: 'Overall urban thermal distribution' },
@@ -46,13 +48,13 @@ const HeatMapPage = ({
 
   const handleSelectPointFromMap = (pt) => {
     // Check if matching location in MOCK_LOCATIONS or format new location
-    const matched = MOCK_LOCATIONS.find(
+    const matched = campusLocations.find(
       (l) => Math.abs(l.lat - pt.latitude) < 0.005 && Math.abs(l.lon - pt.longitude) < 0.005
     );
 
     const target = matched || {
       id: `pt-${pt.id}`,
-      city: 'Chennai',
+      city: 'SRM Kattankulathur',
       area: pt.name,
       lat: pt.latitude,
       lon: pt.longitude,
@@ -98,6 +100,10 @@ const HeatMapPage = ({
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!isWithinSrmCampus(pos.coords.latitude, pos.coords.longitude)) {
+          setGeoError('Your location is outside the SRM Kattankulathur campus area.');
+          return;
+        }
         const estimated = estimateMicroclimateForCoords(pos.coords.latitude, pos.coords.longitude);
         const userLoc = {
           id: 'my-gps-location',
@@ -122,7 +128,7 @@ const HeatMapPage = ({
   };
 
   const activeLayerObj = layers.find((l) => l.id === activeLayer) || layers[0];
-  const selectedArea = centerLoc || currentLocation || MOCK_LOCATIONS[0];
+  const selectedArea = centerLoc || currentLocation || campusLocations[0];
 
   return (
     <div className="page-container heatmap-page">

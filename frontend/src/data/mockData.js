@@ -1,8 +1,8 @@
 export const MOCK_LOCATIONS = [
   {
     id: 'srm-hub',
-    city: 'Chennai',
-    area: 'SRM Katangulathur Hub',
+    city: 'SRM Kattankulathur',
+    area: 'SRM Institute Campus Hub',
     lat: 12.8232,
     lon: 80.0450,
     latitude: 12.8232,
