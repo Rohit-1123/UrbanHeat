@@ -48,7 +48,12 @@ def analyze_route_heat_detail(data: RouteHeatDetailRequest, db: Session = Depend
 
     try:
         analysis = route_service.analyze_route_heat(
-            db, data.coordinates, "Custom Route Path", distance_km=0.0, duration_min=0.0
+            db,
+            data.coordinates,
+            "Custom Route Path",
+            "custom",
+            distance_km=0.0,
+            duration_min=0.0
         )
         return analysis
     except Exception as e:

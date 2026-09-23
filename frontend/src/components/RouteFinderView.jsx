@@ -187,6 +187,26 @@ const RouteFinderView = ({
   const recommendedRoute = routesData?.recommended_route || 'coolest_route';
   const sameMappedPath = routesData?.comparison?.alternatives_available === false;
 
+  if (!routesData && loading) {
+    return (
+      <div className="route-state-panel" role="status">
+        <Loader2 size={22} className="animate-spin text-emerald" />
+        <strong>Finding the coolest mapped SRM walking route...</strong>
+        <span>Snapping your pins to walkable paths and analyzing heat exposure.</span>
+      </div>
+    );
+  }
+
+  if (!routesData || routesData.coolest_route?.heat_risk_level === 'Unavailable') {
+    return (
+      <div className="route-state-panel route-state-error" role="alert">
+        <Navigation size={22} />
+        <strong>{error || 'Choose two SRM campus locations to find a verified coolest route.'}</strong>
+        <span>Use the campus presets, enter coordinates, or place both pins inside the dashed SRM boundary.</span>
+      </div>
+    );
+  }
+
   return (
     <div className="route-finder-container">
       {/* Top Banner Notice */}
@@ -354,11 +374,11 @@ const RouteFinderView = ({
             </form>
           </div>
 
-          {/* Route Options Comparison */}
+          {/* Coolest Route Result */}
           <div className="route-card-block">
             <div className="block-header">
-              <SlidersHorizontal size={16} className="text-emerald" />
-              <span>Compare Route Options</span>
+              <Leaf size={16} className="text-emerald" />
+              <span>Coolest Route</span>
             </div>
 
             {routesData?.comparison?.alternatives_available === false && (
@@ -366,7 +386,7 @@ const RouteFinderView = ({
             )}
 
             {routesData?.comparison?.pins_snapped && (
-              <p className="route-data-note">Your pin was adjusted to the nearest mapped walking path: {routesData.comparison.start_snap_distance_m}m at the start and {routesData.comparison.end_snap_distance_m}m at the destination.</p>
+              <p className="route-data-note">Your pins were connected to the nearest mapped walking paths: {routesData.comparison.start_snap_distance_m}m at the start and {routesData.comparison.end_snap_distance_m}m at the destination.</p>
             )}
 
             <div className="routes-comparison-stack">
@@ -395,55 +415,6 @@ const RouteFinderView = ({
                 </div>
               </div>
 
-              {/* Balanced Route */}
-              <div
-                className={`route-choice-card balanced ${selectedRouteType === 'balanced' ? 'selected' : ''}`}
-                onClick={() => onSelectRouteType('balanced')}
-                onKeyDown={(event) => handleRouteCardKeyDown(event, 'balanced')}
-                role="button"
-                tabIndex={0}
-                aria-pressed={selectedRouteType === 'balanced'}
-              >
-                <div className="choice-top">
-                  <div className="choice-title">
-                    <Shield size={16} className="text-blue" />
-                    <strong>High-Risk Route</strong>
-                  </div>
-                  {sameMappedPath && <span className="route-same-path-badge">Same mapped path</span>}
-                  {recommendedRoute === 'balanced_route' && <span className="badge-best"><CheckCircle size={11} /> Recommended</span>}
-                </div>
-                <div className="choice-stats">
-                  <span><Clock size={13} /> <strong>{balanced.duration_minutes} min</strong></span>
-                  <span><Navigation size={13} /> {balanced.distance_km} km</span>
-                  <span className="text-blue"><Sun size={13} /> <strong>{balanced.maximum_heat_risk}/100 Peak Risk</strong></span>
-                  <span className="text-blue"><Leaf size={13} /> {balanced.shaded_area_percentage}% Shade</span>
-                </div>
-              </div>
-
-              {/* Fastest Route */}
-              <div
-                className={`route-choice-card fastest ${selectedRouteType === 'fastest' ? 'selected' : ''}`}
-                onClick={() => onSelectRouteType('fastest')}
-                onKeyDown={(event) => handleRouteCardKeyDown(event, 'fastest')}
-                role="button"
-                tabIndex={0}
-                aria-pressed={selectedRouteType === 'fastest'}
-              >
-                <div className="choice-top">
-                  <div className="choice-title">
-                    <Zap size={16} className="text-red" />
-                    <strong>Fastest Route</strong>
-                  </div>
-                  {sameMappedPath && <span className="route-same-path-badge">Same mapped path</span>}
-                  {recommendedRoute === 'fastest_route' && <span className="badge-best"><CheckCircle size={11} /> Recommended</span>}
-                </div>
-                <div className="choice-stats">
-                  <span><Clock size={13} /> <strong>{fastest.duration_minutes} min</strong></span>
-                  <span><Navigation size={13} /> {fastest.distance_km} km</span>
-                  <span className="text-red"><Sun size={13} /> {fastest.average_heat_risk}/100 Risk</span>
-                  <span className="text-red"><Leaf size={13} /> {fastest.shaded_area_percentage}% Shade</span>
-                </div>
-              </div>
             </div>
           </div>
 

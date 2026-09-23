@@ -1,6 +1,7 @@
 import os
 import joblib
 import numpy as np
+import pandas as pd
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "heat_risk_model.joblib")
 
@@ -40,7 +41,14 @@ def predict_heat_risk(
     Uses joblib model if available, otherwise falls back to exact analytical formula.
     """
     model = get_loaded_model()
-    features = np.array([[temperature, humidity, uv_index, vegetation_index, building_density, shade_score]])
+    features = pd.DataFrame([{
+        "temperature": temperature,
+        "humidity": humidity,
+        "uv_index": uv_index,
+        "vegetation_index": vegetation_index,
+        "building_density": building_density,
+        "shade_score": shade_score,
+    }])
 
     if model is not None:
         try:

@@ -87,21 +87,6 @@ const MapView = ({
   const defaultCenter = SRM_CAMPUS.center;
 
   const coolestPolyline = routes?.coolest_route?.geometry || routes?.coolest_route?.coordinates || [];
-  const balancedCandidate = routes?.balanced_route?.geometry || routes?.balanced_route?.coordinates || [];
-  const fastestCandidate = routes?.fastest_route?.geometry || routes?.fastest_route?.coordinates || [];
-  const geometryKey = (geometry) => JSON.stringify(geometry);
-  const balancedPolyline = geometryKey(balancedCandidate) === geometryKey(coolestPolyline) ? [] : balancedCandidate;
-  const fastestPolyline = geometryKey(fastestCandidate) === geometryKey(coolestPolyline)
-    || geometryKey(fastestCandidate) === geometryKey(balancedCandidate)
-    ? []
-    : fastestCandidate;
-  const sameMappedPath = routes?.comparison?.alternatives_available === false;
-  const activePathColor = selectedRouteType === 'fastest' ? '#ef4444' : selectedRouteType === 'balanced' ? '#3b82f6' : '#10b981';
-  const activePath = selectedRouteType === 'fastest'
-    ? (fastestCandidate.length > 0 ? fastestCandidate : coolestPolyline)
-    : selectedRouteType === 'balanced'
-      ? (balancedCandidate.length > 0 ? balancedCandidate : coolestPolyline)
-      : coolestPolyline;
 
   return (
     <div className="desktop-map-center-container">
@@ -122,13 +107,6 @@ const MapView = ({
           bounds={SRM_CAMPUS.bounds}
           pathOptions={{ color: '#10b981', weight: 2, dashArray: '6 6', fillColor: '#10b981', fillOpacity: 0.04 }}
         />
-
-        {sameMappedPath && activePath.length > 0 && (
-          <Polyline
-            positions={activePath}
-            pathOptions={{ color: activePathColor, weight: 10, opacity: 0.22, lineCap: 'round' }}
-          />
-        )}
 
         <MapAutoRecenter start={startCoords} end={endCoords} routes={routes} />
         {(onMapClick || onOutsideCampusClick) && (
@@ -167,53 +145,14 @@ const MapView = ({
           </CircleMarker>
         ))}
 
-        {/* 1. Fastest Route Polyline (Red/Crimson) */}
-        {fastestPolyline.length > 0 && (
-          <Polyline
-            positions={fastestPolyline}
-            pathOptions={{
-              color: '#ef4444',
-              weight: selectedRouteType === 'fastest' ? 7 : 4,
-              opacity: selectedRouteType === 'fastest' ? 0.95 : 0.4,
-              dashArray: '6, 6'
-            }}
-          >
-            <Popup>
-              <strong style={{ color: '#ef4444' }}>Fastest Route</strong><br />
-              Distance: {routes.fastest_route.distance_km} km<br />
-              Duration: {routes.fastest_route.duration_minutes} min<br />
-              Heat Risk: {routes.fastest_route.average_heat_risk}/100
-            </Popup>
-          </Polyline>
-        )}
-
-        {/* 2. High-risk comparison line (Blue) when a distinct mapped alternative exists */}
-        {balancedPolyline.length > 0 && (
-          <Polyline
-            positions={balancedPolyline}
-            pathOptions={{
-              color: '#3b82f6',
-              weight: selectedRouteType === 'balanced' ? 7 : 4,
-              opacity: selectedRouteType === 'balanced' ? 0.95 : 0.4
-            }}
-          >
-            <Popup>
-              <strong style={{ color: '#3b82f6' }}>High-Risk Route</strong><br />
-              Distance: {routes.balanced_route.distance_km} km<br />
-              Duration: {routes.balanced_route.duration_minutes} min<br />
-              Heat Risk: {routes.balanced_route.average_heat_risk}/100
-            </Popup>
-          </Polyline>
-        )}
-
-        {/* 3. Coolest Route Polyline (Emerald Green) */}
+        {/* Verified Coolest Route Polyline */}
         {coolestPolyline.length > 0 && (
           <Polyline
             positions={coolestPolyline}
             pathOptions={{
-              color: sameMappedPath ? activePathColor : '#10b981',
-              weight: sameMappedPath || selectedRouteType === 'coolest' ? 8 : 4,
-              opacity: sameMappedPath || selectedRouteType === 'coolest' ? 1.0 : 0.5
+              color: '#10b981',
+              weight: 8,
+              opacity: 1.0
             }}
           >
             <Popup>

@@ -1,6 +1,7 @@
 import math
 import requests
 import numpy as np
+import time
 from copy import deepcopy
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -11,33 +12,99 @@ OSRM_BASE_URL = "https://routing.openstreetmap.de/routed-foot/route/v1/driving"
 
 class RouteService:
     @staticmethod
+    def decode_polyline(encoded: str) -> List[List[float]]:
+        """Decode a Google-style encoded polyline into [lat, lon] pairs."""
+        points = []
+        index = latitude = longitude = 0
+        while index < len(encoded):
+            result = shift = 0
+            while index < len(encoded):
+                byte = ord(encoded[index]) - 63
+                index += 1
+                result |= (byte & 0x1f) << shift
+                shift += 5
+                if byte < 0x20:
+                    break
+            latitude += ~(result >> 1) if result & 1 else result >> 1
+
+            result = shift = 0
+            while index < len(encoded):
+                byte = ord(encoded[index]) - 63
+                index += 1
+                result |= (byte & 0x1f) << shift
+                shift += 5
+                if byte < 0x20:
+                    break
+            longitude += ~(result >> 1) if result & 1 else result >> 1
+            points.append([latitude / 1e5, longitude / 1e5])
+        return points
+
+    @staticmethod
+    def extract_route_coordinates(raw_route: Dict[str, Any]) -> List[List[float]]:
+        """Normalize common GeoJSON geometry shapes to [latitude, longitude]."""
+        geometry = raw_route.get("geometry")
+        coordinates = geometry.get("coordinates") if isinstance(geometry, dict) else geometry
+        if isinstance(coordinates, str):
+            return RouteService.decode_polyline(coordinates)
+        if not isinstance(coordinates, list) or not coordinates:
+            return []
+
+        def flatten(points: Any) -> List[List[float]]:
+            if not isinstance(points, list) or not points:
+                return []
+            if len(points) >= 2 and all(isinstance(value, (int, float)) for value in points[:2]):
+                return [[round(float(points[1]), 6), round(float(points[0]), 6)]]
+            result = []
+            for child in points:
+                result.extend(flatten(child))
+            return result
+
+        normalized = flatten(coordinates)
+        return normalized if len(normalized) >= 2 else []
+
+    @staticmethod
     def snap_to_walkable_point(lat: float, lon: float) -> tuple[float, float, float]:
         """Snap an arbitrary campus pin to the nearest mapped walking segment."""
-        url = f"{OSRM_BASE_URL.replace('/route/', '/nearest/')}/{lon},{lat}?number=1"
-        try:
-            response = requests.get(url, timeout=6)
-            response.raise_for_status()
-            data = response.json()
-            waypoint = data.get("waypoints", [None])[0]
-            if waypoint and waypoint.get("location"):
-                snapped_lon, snapped_lat = waypoint["location"]
-                return float(snapped_lat), float(snapped_lon), float(waypoint.get("distance", 0.0))
-        except requests.RequestException as exc:
-            print(f"⚠️ Walking snap request failed: {exc}")
+        nearest_url = OSRM_BASE_URL.replace('/route/', '/nearest/')
+        search_points = [(lat, lon)]
+        for offset in (0.00025, -0.00025, 0.0005, -0.0005):
+            search_points.extend([(lat + offset, lon), (lat, lon + offset)])
+
+        for candidate_lat, candidate_lon in search_points:
+            url = f"{nearest_url}/{candidate_lon},{candidate_lat}?number=3"
+            for attempt in range(2):
+                try:
+                    response = requests.get(url, timeout=10)
+                    response.raise_for_status()
+                    data = response.json()
+                    for waypoint in data.get("waypoints", []):
+                        if waypoint.get("location"):
+                            snapped_lon, snapped_lat = waypoint["location"]
+                            return float(snapped_lat), float(snapped_lon), float(waypoint.get("distance", 0.0))
+                    break
+                except requests.RequestException as exc:
+                    if attempt == 1:
+                        print(f"Walking snap attempt failed: {exc}")
+                    else:
+                        time.sleep(0.15)
         raise ValueError("No mapped walking path was found near one of the selected SRM campus pins")
 
     @staticmethod
     def fetch_osrm_routes(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> List[Dict[str, Any]]:
         """Fetches route options from public OpenStreetMap OSRM API."""
         url = f"{OSRM_BASE_URL}/{start_lon},{start_lat};{end_lon},{end_lat}?overview=full&geometries=geojson&steps=true&alternatives=true"
-        try:
-            resp = requests.get(url, timeout=6)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("code") == "Ok" and "routes" in data:
-                    return data["routes"]
-        except Exception as e:
-            print(f"⚠️ OSRM API request failed or timed out: {e}. Using fallback route generation.")
+        for attempt in range(3):
+            try:
+                resp = requests.get(url, timeout=12)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("code") == "Ok" and "routes" in data:
+                        return data["routes"]
+            except requests.RequestException as exc:
+                if attempt == 2:
+                    print(f"Walking route request failed: {exc}")
+                else:
+                    time.sleep(0.2)
         
         return []
 
@@ -173,11 +240,11 @@ class RouteService:
 
         route_options = []
         for raw_route in raw_routes:
-            raw_coords = raw_route.get("geometry", {}).get("coordinates", [])
-            if len(raw_coords) < 2:
+            coordinates = RouteService.extract_route_coordinates(raw_route)
+            if len(coordinates) < 2:
                 continue
             route_options.append({
-                "coords": [[round(point[1], 6), round(point[0], 6)] for point in raw_coords],
+                "coords": coordinates,
                 "distance_km": raw_route.get("distance", 0.0) / 1000.0,
                 "duration_min": raw_route.get("duration", 0.0) / 60.0,
                 "steps": [step for leg in raw_route.get("legs", []) for step in leg.get("steps", [])]

@@ -63,6 +63,7 @@ class RouteAnalysis(BaseModel):
     final_score: float
     geometry: List[List[float]]  # List of [lat, lon]
     sampled_points: List[RoutePointHeat]
+    turn_by_turn: List[Dict[str, Any]] = Field(default_factory=list)
 
 class RouteRecommendationResponse(BaseModel):
     coolest_route: RouteAnalysis

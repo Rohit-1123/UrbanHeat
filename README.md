@@ -27,7 +27,7 @@ By integrating environmental parameters (**Temperature, Humidity, UV Index, Vege
   $$\text{Score} = 0.25 \times \text{Distance}_{\text{norm}} + 0.25 \times \text{Duration}_{\text{norm}} + 0.50 \times \text{HeatRisk}_{\text{norm}}$$
 -  **Random Forest ML Heat Risk Model**: Predicts heat risk (0–100) and risk levels (`LOW`, `MODERATE`, `HIGH`, `EXTREME`).
 - **PostgreSQL + PostGIS & SQLite Fallback**: Spatial database support with an automatic zero-config fallback.
--  **OSRM Integration**: Fetches real OpenStreetMap driving geometries and generates shaded alternative detour routes.
+-  **OpenStreetMap Walking Routing**: Fetches real mapped walking geometries inside the SRM campus boundary and reports verified alternatives when available.
 
 ---
 
@@ -37,7 +37,7 @@ By integrating environmental parameters (**Temperature, Humidity, UV Index, Vege
 - **Backend**: Python 3.13, FastAPI, Uvicorn, Pydantic v2.
 - **Database**: PostgreSQL 15 + PostGIS (via Docker Compose) with automatic SQLite local fallback (`urban_heat.db`).
 - **Machine Learning**: Scikit-Learn (RandomForestRegressor / XGBoost), NumPy, Pandas, Joblib.
-- **Routing**: OpenStreetMap OSRM Public Routing API.
+- **Routing**: OpenStreetMap routed-foot service with nearest-path snapping for campus pins.
 
 ---
 
@@ -144,7 +144,7 @@ python ml/train_model.py
 
 ### Step 3: Start FastAPI Backend Server
 ```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 API Documentation will be accessible at: `http://127.0.0.1:8000/docs`
 
@@ -165,7 +165,8 @@ Open `http://localhost:5173` in your browser.
 | `GET` | `/health` | Returns backend operational status (`{"status": "running"}`). |
 | `POST` | `/api/predict-heat` | Predicts Heat Risk (0–100) & risk level from environmental metrics. |
 | `GET` | `/api/heatmap` | Returns geographical heat points for interactive map overlays. |
-| `POST` | `/api/recommend-route` | Compares Fastest vs. Coolest routes between start & end coordinates. |
+| `GET` | `/api/location-search?q=...` | Searches mapped SRM campus places through OpenStreetMap. |
+| `POST` | `/api/recommend-route` | Calculates and ranks mapped routes, returning the verified coolest route and supporting metrics. |
 | `POST` | `/api/route-heat` | Analyzes point-by-point heat exposure along a given geometry path. |
 
 ### Sample Route Recommendation Request (`POST /api/recommend-route`)

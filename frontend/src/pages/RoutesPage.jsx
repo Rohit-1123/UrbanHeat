@@ -71,7 +71,10 @@ const RoutesPage = ({ currentLocation }) => {
         recommended_route: 'coolest_route',
         comparison: { alternatives_available: false }
       });
-      setError(err.response?.data?.detail || 'No walkable SRM campus route is available for these pins right now.');
+      const status = err.response?.status;
+      setError(status === 400
+        ? 'Both route points must be inside the SRM campus boundary.'
+        : 'Could not calculate a verified walking route for these campus points. Try a nearby mapped road or landmark.');
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -103,7 +106,7 @@ const RoutesPage = ({ currentLocation }) => {
 
   const handleUseLocation = (type) => {
     if (!navigator.geolocation) {
-      alert('Geolocation not supported.');
+      setError('Geolocation is not supported. Place the start or destination pin on the SRM campus map.');
       return;
     }
     navigator.geolocation.getCurrentPosition(
