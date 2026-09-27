@@ -55,6 +55,12 @@ const App = () => {
 
     try {
       const detail = await getLocationHeatDetail(latitude, longitude, location.area || location.name || 'SRM Campus Location');
+      // getLocationHeatDetail's `vegetation_cover`/`building_density` are human-readable
+      // display strings (e.g. "High (Dense Urban)"), not the 0-1 numeric ratios the rest
+      // of the app expects under those same field names — spreading `detail` as-is would
+      // clobber the numeric convention and produce NaN wherever it's used in math (e.g.
+      // Math.round(building_density * 100)). Estimate real numeric values instead.
+      const estimated = estimateMicroclimateForCoords(latitude, longitude);
       setCurrentLocation((previous) => ({
         ...previous,
         ...detail,
@@ -62,6 +68,13 @@ const App = () => {
         longitude,
         lat: latitude,
         lon: longitude,
+        vegetation_index: estimated.vegetationIndex,
+        vegetationIndex: estimated.vegetationIndex,
+        vegetation: estimated.vegetation,
+        building_density: estimated.builtUpDensity,
+        builtUpDensity: estimated.builtUpDensity,
+        builtUpDensityLevel: estimated.builtUpDensityLevel,
+        shade_score: estimated.shade_score,
         area: location.area || location.name || detail.location_name,
         city: location.city || 'SRM Kattankulathur',
         heatRiskScore: detail.heat_risk_score,

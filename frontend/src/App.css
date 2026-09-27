@@ -1046,6 +1046,12 @@ body {
   z-index: 1;
 }
 
+/* Fakes a dark basemap over the free OSM tile source (which has no dark
+   variant) by inverting and re-hueing the tile layer's pixels. */
+.map-tile-dark-filter {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
+}
+
 /* Active Layer Overlay Pill */
 .active-layer-indicator {
   position: absolute;

@@ -10,12 +10,20 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
   const handleSyncWeather = async () => {
     setSyncingWeather(true);
     try {
-      const lat = currentLocation?.latitude || 12.8232;
-      const lon = currentLocation?.longitude || 80.0450;
+      const lat = currentLocation?.latitude ?? currentLocation?.lat ?? 12.8232;
+      const lon = currentLocation?.longitude ?? currentLocation?.lon ?? 80.0450;
       const live = await fetchLiveWeather(lat, lon);
       onSelectLocation({
         ...currentLocation,
         ...live,
+        // fetchLiveWeather's response carries no coordinates, and currentLocation
+        // may still be null at auto-load time (this effect can fire before the
+        // app has set an initial location) — always set these explicitly so the
+        // map/route views never receive a location with missing lat/lon.
+        latitude: lat,
+        longitude: lon,
+        lat,
+        lon,
         area: currentLocation?.area || 'Local Area',
         city: currentLocation?.city || 'SRM Kattankulathur'
       });
