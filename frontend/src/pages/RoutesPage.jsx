@@ -72,9 +72,13 @@ const RoutesPage = ({ currentLocation }) => {
         comparison: { alternatives_available: false }
       });
       const status = err.response?.status;
-      setError(status === 400
-        ? 'Both route points must be inside the SRM campus boundary.'
-        : 'Could not calculate a verified walking route for these campus points. Try a nearby mapped road or landmark.');
+      if (status === 400) {
+        setError('Both route points must be inside the SRM campus boundary.');
+      } else if (err.errorType === 'network' || err.errorType === 'timeout') {
+        setError(err.friendlyMessage);
+      } else {
+        setError('Could not calculate a verified walking route for these campus points. Try a nearby mapped road or landmark.');
+      }
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }

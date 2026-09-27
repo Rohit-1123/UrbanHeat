@@ -292,6 +292,51 @@ body {
   gap: 12px;
 }
 
+.backend-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-control, 8px);
+  background: var(--surface-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.backend-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.backend-status-badge.checking .backend-status-dot {
+  background: var(--text-muted);
+  animation: statusPulse 1.4s ease-in-out infinite;
+}
+
+.backend-status-badge.connected .backend-status-dot {
+  background: var(--environment);
+}
+
+.backend-status-badge.disconnected .backend-status-dot {
+  background: var(--danger);
+}
+
+.backend-status-badge.disconnected {
+  color: var(--danger);
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (max-width: 768px) {
+  .backend-status-label { display: none; }
+}
+
 .theme-toggle-btn {
   display: flex;
   align-items: center;
@@ -697,6 +742,16 @@ body {
 
 .overview-card.clickable {
   cursor: pointer;
+}
+
+.overview-card-loading {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
 .overview-card.clickable:hover {

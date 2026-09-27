@@ -9,7 +9,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import InsightsPage from './pages/InsightsPage';
 import HeatAlertBanner from './components/HeatAlertBanner';
 
-import { fetchHeatPoints, fetchCurrentHeatData } from './services/heatService';
+import { fetchHeatPoints, fetchCurrentHeatData, checkBackendStatus } from './services/heatService';
 import { getLocationHeatDetail } from './services/api';
 import { estimateMicroclimateForCoords } from './utils/riskCalculator';
 import './App.css';
@@ -23,18 +23,31 @@ const App = () => {
 
   const [currentLocation, setCurrentLocation] = useState(null);
   const [heatPoints, setHeatPoints] = useState([]);
+  const [heatPointsError, setHeatPointsError] = useState(null);
   const [locationError, setLocationError] = useState(null);
+  // 'checking' | 'connected' | 'disconnected' — reflects a single real
+  // GET /health call made once on app load, never polled repeatedly.
+  const [backendStatus, setBackendStatus] = useState('checking');
 
   useEffect(() => {
     const initialize = async () => {
-      const defaultLoc = await fetchCurrentHeatData('srm-hub');
+      const defaultLoc = await fetchCurrentHeatData();
       setCurrentLocation(defaultLoc);
 
-      const points = await fetchHeatPoints();
-      setHeatPoints(points);
+      try {
+        const points = await fetchHeatPoints();
+        setHeatPoints(points);
+        setHeatPointsError(null);
+      } catch (err) {
+        console.error('Failed to load heat map data from backend:', err);
+        setHeatPoints([]);
+        setHeatPointsError('Live environmental data is currently unavailable. Please try again shortly.');
+      }
     };
 
     initialize();
+
+    checkBackendStatus().then((isUp) => setBackendStatus(isUp ? 'connected' : 'disconnected'));
   }, []);
 
   useEffect(() => {
@@ -137,6 +150,7 @@ const App = () => {
         onNavigate={setActivePage}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        backendStatus={backendStatus}
       />
 
       {/* Dynamic Heat Wave Alert Banner */}
@@ -167,6 +181,7 @@ const App = () => {
           <HeatMapPage
             currentLocation={currentLocation}
             heatPoints={heatPoints}
+            heatPointsError={heatPointsError}
             onSelectLocation={handleSelectLocation}
             onUseMyLocation={handleUseMyLocation}
             onNavigate={setActivePage}

@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import TemperatureChart from '../components/TemperatureChart';
 import HeatTrendChart from '../components/HeatTrendChart';
 import AreaComparison from '../components/AreaComparison';
 import SimulatorView from '../components/SimulatorView';
 import ExportReportModal from '../components/ExportReportModal';
-import { MOCK_TREND_DATA } from '../data/mockData';
 import { getRiskColor } from '../utils/riskCalculator';
 import { getHeatTrend, getLocationHeatDetail } from '../services/api';
 import {
@@ -48,6 +46,7 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
 
   const [liveRisk, setLiveRisk] = useState(null);
   const [riskLoading, setRiskLoading] = useState(false);
+  const [riskError, setRiskError] = useState(null);
 
   useEffect(() => {
     if (activeTab !== 'trends' || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lon)) return;
@@ -64,17 +63,23 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
     if (activeTab !== 'risk' || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lon)) return;
     let cancelled = false;
     setRiskLoading(true);
+    setRiskError(null);
     getLocationHeatDetail(loc.lat, loc.lon, loc.area)
-      .then((data) => { if (!cancelled) setLiveRisk(data); })
-      .catch(() => { if (!cancelled) setLiveRisk(null); })
+      .then((data) => { if (!cancelled) { setLiveRisk(data); setRiskError(null); } })
+      .catch((err) => {
+        if (cancelled) return;
+        setLiveRisk(null);
+        setRiskError(err.friendlyMessage || 'Live risk data is currently unavailable. Please try again.');
+      })
       .finally(() => { if (!cancelled) setRiskLoading(false); });
     return () => { cancelled = true; };
   }, [activeTab, loc.lat, loc.lon, loc.area]);
 
-  // Real backend-predicted score when available; static disclosed estimate otherwise.
-  const riskScore = liveRisk ? liveRisk.heat_risk_score : 50;
-  const riskLevelLabel = liveRisk ? liveRisk.risk_level.replace(' Heat Risk', '') : 'Moderate';
-  const riskColor = getRiskColor(riskScore);
+  // Only ever a real, live backend-predicted score — never a fabricated
+  // placeholder number shown as if it were real.
+  const riskScore = liveRisk?.heat_risk_score;
+  const riskLevelLabel = liveRisk?.risk_level?.replace(' Heat Risk', '');
+  const riskColor = getRiskColor(riskScore ?? 0);
 
   const riskTimeline = liveRisk
     ? liveRisk.forecast.map((f) => ({
@@ -176,13 +181,9 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
       {activeTab === 'trends' && (
         <div className="analytics-grid-layout">
           <div className="grid-full">
-            <TemperatureChart trendData={MOCK_TREND_DATA} />
-          </div>
-
-          <div className="grid-half">
             <HeatTrendChart points={trendPoints} loading={trendLoading} />
           </div>
-          <div className="grid-half">
+          <div className="grid-full">
             <AreaComparison />
           </div>
 
@@ -231,23 +232,42 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
           {/* Risk Score Indicator Card */}
           <div className="card-full risk-score-card">
             <div className="score-badge-circle" style={{ borderColor: riskColor, color: riskColor }}>
-              {riskLoading ? <Loader2 size={22} className="animate-spin" /> : <span className="num">{riskScore}</span>}
-              <span className="denom">/ 100</span>
+              {riskLoading ? (
+                <Loader2 size={22} className="animate-spin" />
+              ) : riskError ? (
+                <AlertTriangle size={22} className="text-red" />
+              ) : (
+                <span className="num">{riskScore}</span>
+              )}
+              {!riskLoading && !riskError && <span className="denom">/ 100</span>}
             </div>
 
             <div className="score-info">
-              <div className="status-tag" style={{ backgroundColor: `${riskColor}20`, color: riskColor, borderColor: riskColor }}>
-                <ShieldAlert size={16} />
-                <span>{riskLevelLabel} Heat Risk Status</span>
-              </div>
-              <h2>Environmental Vulnerability Index</h2>
-              <p className="score-desc">
-                Current ambient conditions may increase the risk of heat exhaustion and physiological thermal stress during prolonged outdoor exposure.
-              </p>
-              <div className="disclaimer-note">
-                <AlertTriangle size={14} className="text-amber" />
-                <span>Note: This score is predicted by the trained heat-risk model for {loc.area}, based on live environmental factors at this location.</span>
-              </div>
+              {riskError ? (
+                <>
+                  <div className="status-tag" style={{ backgroundColor: 'var(--danger-soft)', color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                    <AlertTriangle size={16} />
+                    <span>Live Data Unavailable</span>
+                  </div>
+                  <h2>Environmental Vulnerability Index</h2>
+                  <p className="score-desc">{riskError}</p>
+                </>
+              ) : (
+                <>
+                  <div className="status-tag" style={{ backgroundColor: `${riskColor}20`, color: riskColor, borderColor: riskColor }}>
+                    <ShieldAlert size={16} />
+                    <span>{riskLevelLabel || (riskLoading ? 'Loading…' : 'Unknown')} Heat Risk Status</span>
+                  </div>
+                  <h2>Environmental Vulnerability Index</h2>
+                  <p className="score-desc">
+                    Current ambient conditions may increase the risk of heat exhaustion and physiological thermal stress during prolonged outdoor exposure.
+                  </p>
+                  <div className="disclaimer-note">
+                    <AlertTriangle size={14} className="text-amber" />
+                    <span>Note: This score is predicted by the trained heat-risk model for {loc.area}, based on live environmental factors at this location.</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

@@ -7,11 +7,12 @@ const HeatAlertBanner = ({ currentLocation, onNavigate }) => {
 
   const hour = new Date().getHours();
   const isPeakHours = hour >= 11 && hour <= 16;
-  const riskScore = currentLocation?.heatRiskScore || 65;
-  const isHighRisk = riskScore >= 60;
+  const riskScore = currentLocation?.heatRiskScore ?? currentLocation?.heat_risk;
+  const isHighRisk = Number.isFinite(riskScore) && riskScore >= 60;
 
-  // If dismissed or risk is low & not peak hours, don't show
-  if (dismissed || (!isHighRisk && !isPeakHours)) {
+  // Don't show until real location/heat data has loaded — never trigger a
+  // heat advisory off a fabricated default risk score.
+  if (dismissed || !currentLocation || !Number.isFinite(riskScore) || (!isHighRisk && !isPeakHours)) {
     return null;
   }
 
@@ -32,7 +33,7 @@ const HeatAlertBanner = ({ currentLocation, onNavigate }) => {
             <div className="heat-alert-heading">
               <span className="alert-badge">{alertTitle}</span>
               <span className="alert-location">
-                {currentLocation?.area || 'SRM Campus'} · Temp: {currentLocation?.temperature || 34}°C (Feels like {currentLocation?.feelsLike || 39}°C)
+                {currentLocation?.area || 'SRM Campus'} · Temp: {currentLocation?.temperature}°C (Feels like {currentLocation?.feelsLike}°C)
               </span>
             </div>
             <p className="alert-summary">

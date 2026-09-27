@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { Leaf, Menu, X, Home, Map, Navigation, BarChart3, BookOpen } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
-const Navbar = ({ activePage, onNavigate, theme, onToggleTheme }) => {
+const BACKEND_STATUS_META = {
+  checking: { label: 'Connecting…', className: 'checking' },
+  connected: { label: 'Backend Connected', className: 'connected' },
+  disconnected: { label: 'Backend Offline', className: 'disconnected' },
+};
+
+const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 'checking' }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Minimal, focused top-level topics
@@ -59,8 +65,16 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme }) => {
           })}
         </nav>
 
-        {/* Right Controls: Theme Toggle & Mobile Hamburger */}
+        {/* Right Controls: Backend Status, Theme Toggle & Mobile Hamburger */}
         <div className="navbar-actions">
+          <span
+            className={`backend-status-badge ${BACKEND_STATUS_META[backendStatus].className}`}
+            title={BACKEND_STATUS_META[backendStatus].label}
+          >
+            <span className="backend-status-dot" />
+            <span className="backend-status-label">{BACKEND_STATUS_META[backendStatus].label}</span>
+          </span>
+
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
 
           <button

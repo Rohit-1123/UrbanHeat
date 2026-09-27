@@ -1,24 +1,30 @@
 import React from 'react';
-import { Thermometer, ShieldAlert, Flame, Lightbulb, ChevronRight } from 'lucide-react';
+import { Thermometer, ShieldAlert, Flame, Lightbulb, ChevronRight, Loader2 } from 'lucide-react';
 import { getRiskColor } from '../utils/riskCalculator';
 
 const HeatOverviewCard = ({ locationData, onNavigate }) => {
-  const data = locationData || {
-    temperature: 34,
-    feelsLike: 39,
-    heatRiskScore: 68,
-    riskLevel: 'High',
-    hottestZone: 'Central Urban Area',
-    recommendedAction: 'Stay hydrated and limit prolonged outdoor exposure between 12 PM and 4 PM.'
-  };
+  // No fabricated fallback numbers: while the real location/heat data is
+  // still loading, show an explicit loading state instead of a fake
+  // temperature/risk score.
+  if (!locationData) {
+    return (
+      <div className="overview-cards-grid">
+        <div className="overview-card overview-card-loading">
+          <Loader2 size={20} className="animate-spin text-emerald" />
+          <span>Loading live environmental data...</span>
+        </div>
+      </div>
+    );
+  }
 
-  const temperature = data.temperature ?? 34;
-  const feelsLike = data.feelsLike ?? (temperature + 5);
-  const heatRiskScore = data.heatRiskScore ?? data.heat_risk ?? 50;
-  const riskLevel = data.riskLevel ?? data.risk_level ?? 'Moderate';
+  const data = locationData;
+  const temperature = data.temperature ?? data.airTemp;
+  const feelsLike = data.feelsLike ?? (Number.isFinite(temperature) ? temperature + 5 : undefined);
+  const heatRiskScore = data.heatRiskScore ?? data.heat_risk;
+  const riskLevel = data.riskLevel ?? data.risk_level;
   const hottestZone = data.hottestZone ?? data.area ?? 'Selected SRM Campus Place';
   const recommendedAction = data.recommendedAction ?? 'Use shaded campus paths and maintain regular hydration.';
-  const riskColor = getRiskColor(heatRiskScore);
+  const riskColor = getRiskColor(heatRiskScore ?? 0);
 
   return (
     <div className="overview-cards-grid">
@@ -31,8 +37,8 @@ const HeatOverviewCard = ({ locationData, onNavigate }) => {
           <span className="card-link-hint">Analytics <ChevronRight size={14} /></span>
         </div>
         <div className="card-main-val">
-          <span className="val-number">{temperature}°C</span>
-          <span className="val-sub">Feels Like {feelsLike}°C</span>
+          <span className="val-number">{Number.isFinite(temperature) ? `${temperature}°C` : 'N/A'}</span>
+          <span className="val-sub">{Number.isFinite(feelsLike) ? `Feels Like ${feelsLike}°C` : 'Feels-like data unavailable'}</span>
         </div>
         <div className="card-label">Current Temperature</div>
       </div>
@@ -47,9 +53,9 @@ const HeatOverviewCard = ({ locationData, onNavigate }) => {
         </div>
         <div className="card-main-val">
           <span className="risk-level-tag" style={{ backgroundColor: `${riskColor}20`, color: riskColor, borderColor: `${riskColor}40` }}>
-            {riskLevel} Risk
+            {riskLevel || 'Unknown'} Risk
           </span>
-          <span className="val-sub">Score {heatRiskScore}/100</span>
+          <span className="val-sub">{Number.isFinite(heatRiskScore) ? `Score ${heatRiskScore}/100` : 'Score unavailable'}</span>
         </div>
         <div className="card-label">Heat Risk Status</div>
       </div>

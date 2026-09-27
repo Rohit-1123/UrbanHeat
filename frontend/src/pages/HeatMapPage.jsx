@@ -20,6 +20,7 @@ import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 const HeatMapPage = ({
   currentLocation,
   heatPoints = [],
+  heatPointsError = null,
   onSelectLocation,
   onUseMyLocation,
   onNavigate,
@@ -175,6 +176,14 @@ const HeatMapPage = ({
           <AlertCircle size={16} />
           <span>{geoError}</span>
           <button className="toast-dismiss-btn" onClick={() => setGeoError(null)}>×</button>
+        </div>
+      )}
+
+      {/* Live Data Unavailable Toast — real backend failure, never a fake/mock substitute */}
+      {heatPointsError && (
+        <div className="map-alert-toast">
+          <AlertCircle size={16} />
+          <span>{heatPointsError}</span>
         </div>
       )}
 

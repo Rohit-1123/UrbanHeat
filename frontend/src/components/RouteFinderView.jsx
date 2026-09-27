@@ -111,65 +111,42 @@ const RouteFinderView = ({
     onOutsideCampusClick?.();
   };
 
-  const happiest = routesData?.coolest_route || {
-    route_name: 'Coolest Route (Shaded Canopy)',
-    duration_minutes: 15,
-    distance_km: 2.4,
-    average_heat_risk: 34,
-    maximum_heat_risk: 48,
-    heat_risk_level: 'Low',
-    shaded_area_percentage: 76,
-    heat_profile: [
-      { distance: 0, heat_risk: 28 },
-      { distance: 0.8, heat_risk: 24 },
-      { distance: 1.6, heat_risk: 36 },
-      { distance: 2.4, heat_risk: 32 }
-    ],
-    turn_by_turn: [
-      { instruction: 'Start from origin and head toward the shaded pedestrian sidewalk.', distance: '200m' },
-      { instruction: 'Continue along the tree-lined campus boulevard (76% canopy cover).', distance: '650m' },
-      { instruction: 'Walk through the green park corridor to bypass asphalt heat radiation.', distance: '450m' },
-      { instruction: 'Arrive at destination safely with reduced thermal exposure.', distance: '100m' }
-    ]
-  };
+  // Loading and error/empty states are checked BEFORE any route data is
+  // read, so the component never falls through to rendering with missing
+  // route fields. There is deliberately no fabricated fallback route here —
+  // if the backend hasn't returned a real, verified route, we show an
+  // explicit state instead of inventing distances, durations, or turn-by-turn
+  // instructions.
+  if (!routesData && loading) {
+    return (
+      <div className="route-state-panel" role="status">
+        <Loader2 size={22} className="animate-spin text-emerald" />
+        <strong>Finding the coolest mapped SRM walking route...</strong>
+        <span>Snapping your pins to walkable paths and analyzing heat exposure.</span>
+      </div>
+    );
+  }
 
-  const balanced = routesData?.balanced_route || {
-    route_name: 'Balanced Route',
-    duration_minutes: 12,
-    distance_km: 2.1,
-    average_heat_risk: 56,
-    maximum_heat_risk: 68,
-    heat_risk_level: 'Moderate',
-    shaded_area_percentage: 48,
-    heat_profile: [
-      { distance: 0, heat_risk: 50 },
-      { distance: 1.0, heat_risk: 58 },
-      { distance: 2.1, heat_risk: 54 }
-    ],
-    turn_by_turn: [
-      { instruction: 'Head east on secondary arterial lane.', distance: '500m' },
-      { instruction: 'Take the pedestrian bridge to destination.', distance: '300m' }
-    ]
-  };
+  const hasCompleteRouteData = Boolean(
+    routesData?.coolest_route
+    && routesData?.balanced_route
+    && routesData?.fastest_route
+    && routesData.coolest_route.heat_risk_level !== 'Unavailable'
+  );
 
-  const fastest = routesData?.fastest_route || {
-    route_name: 'Fastest Direct Route (High Sun Exposure)',
-    duration_minutes: 10,
-    distance_km: 1.8,
-    average_heat_risk: 78,
-    maximum_heat_risk: 86,
-    heat_risk_level: 'High',
-    shaded_area_percentage: 18,
-    heat_profile: [
-      { distance: 0, heat_risk: 74 },
-      { distance: 0.9, heat_risk: 84 },
-      { distance: 1.8, heat_risk: 78 }
-    ],
-    turn_by_turn: [
-      { instruction: 'Proceed directly down the main unshaded vehicular highway.', distance: '800m' },
-      { instruction: 'Continue on open pavement with direct solar radiation.', distance: '600m' }
-    ]
-  };
+  if (!hasCompleteRouteData) {
+    return (
+      <div className="route-state-panel route-state-error" role="alert">
+        <Navigation size={22} />
+        <strong>{error || 'Choose two SRM campus locations to find a verified coolest route.'}</strong>
+        <span>Use the campus presets, enter coordinates, or place both pins inside the dashed SRM boundary.</span>
+      </div>
+    );
+  }
+
+  const happiest = routesData.coolest_route;
+  const balanced = routesData.balanced_route;
+  const fastest = routesData.fastest_route;
 
   const getActiveRoute = (type) => (type === 'coolest' ? happiest : type === 'balanced' ? balanced : fastest);
   const activeRoute = getActiveRoute(selectedRouteType);
@@ -186,26 +163,6 @@ const RouteFinderView = ({
     : 0;
   const recommendedRoute = routesData?.recommended_route || 'coolest_route';
   const sameMappedPath = routesData?.comparison?.alternatives_available === false;
-
-  if (!routesData && loading) {
-    return (
-      <div className="route-state-panel" role="status">
-        <Loader2 size={22} className="animate-spin text-emerald" />
-        <strong>Finding the coolest mapped SRM walking route...</strong>
-        <span>Snapping your pins to walkable paths and analyzing heat exposure.</span>
-      </div>
-    );
-  }
-
-  if (!routesData || routesData.coolest_route?.heat_risk_level === 'Unavailable') {
-    return (
-      <div className="route-state-panel route-state-error" role="alert">
-        <Navigation size={22} />
-        <strong>{error || 'Choose two SRM campus locations to find a verified coolest route.'}</strong>
-        <span>Use the campus presets, enter coordinates, or place both pins inside the dashed SRM boundary.</span>
-      </div>
-    );
-  }
 
   return (
     <div className="route-finder-container">
@@ -509,19 +466,19 @@ const RouteFinderView = ({
               </div>
 
               <div className="turn-steps-container">
-                {(activeRoute.turn_by_turn || [
-                  { instruction: 'Head toward tree-canopied sidewalk', distance: '300m' },
-                  { instruction: 'Follow the green boulevard pathway', distance: '600m' },
-                  { instruction: 'Arrive safely at destination', distance: '100m' }
-                ]).map((step, idx) => (
-                  <div key={idx} className="turn-step-card">
-                    <div className="step-badge-num">{idx + 1}</div>
-                    <div className="step-content">
-                      <p className="step-inst"><strong>{step.instruction}</strong></p>
-                      {step.distance && <span className="step-dist">Segment Distance: {step.distance}</span>}
+                {activeRoute.turn_by_turn && activeRoute.turn_by_turn.length > 0 ? (
+                  activeRoute.turn_by_turn.map((step, idx) => (
+                    <div key={idx} className="turn-step-card">
+                      <div className="step-badge-num">{idx + 1}</div>
+                      <div className="step-content">
+                        <p className="step-inst"><strong>{step.instruction}</strong></p>
+                        {step.distance && <span className="step-dist">Segment Distance: {step.distance}</span>}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="route-data-note">Turn-by-turn instructions are not available for this route.</p>
+                )}
               </div>
 
               <button className="btn-start-walking" onClick={() => setShowNavModal(false)}>
