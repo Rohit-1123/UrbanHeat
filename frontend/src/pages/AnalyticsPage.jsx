@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TemperatureChart from '../components/TemperatureChart';
 import HeatTrendChart from '../components/HeatTrendChart';
 import AreaComparison from '../components/AreaComparison';
 import SimulatorView from '../components/SimulatorView';
 import ExportReportModal from '../components/ExportReportModal';
 import { MOCK_TREND_DATA } from '../data/mockData';
-import { calculateHeatRisk, getRiskColor } from '../utils/riskCalculator';
+import { getRiskColor } from '../utils/riskCalculator';
+import { getHeatTrend, getLocationHeatDetail } from '../services/api';
 import {
   Lightbulb,
   TrendingUp,
@@ -20,7 +21,8 @@ import {
   Droplets,
   Users,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 
 const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
@@ -36,17 +38,58 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
     builtUpDensity: 0.75,
     feelsLike: 39,
     surfaceTemp: 38.5,
-    uvIndex: 8.5
+    uvIndex: 8.5,
+    lat: 12.8233,
+    lon: 80.0435
   };
 
-  const riskResult = calculateHeatRisk({
-    temperature: loc.temperature,
-    humidity: loc.humidity,
-    vegetationIndex: loc.vegetationIndex,
-    builtUpDensity: loc.builtUpDensity
-  });
+  const [trendPoints, setTrendPoints] = useState(null);
+  const [trendLoading, setTrendLoading] = useState(false);
 
-  const riskColor = getRiskColor(riskResult.score);
+  const [liveRisk, setLiveRisk] = useState(null);
+  const [riskLoading, setRiskLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'trends' || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lon)) return;
+    let cancelled = false;
+    setTrendLoading(true);
+    getHeatTrend(loc.lat, loc.lon, loc.area)
+      .then((data) => { if (!cancelled) setTrendPoints(data.points); })
+      .catch(() => { if (!cancelled) setTrendPoints(null); })
+      .finally(() => { if (!cancelled) setTrendLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, loc.lat, loc.lon, loc.area]);
+
+  useEffect(() => {
+    if (activeTab !== 'risk' || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lon)) return;
+    let cancelled = false;
+    setRiskLoading(true);
+    getLocationHeatDetail(loc.lat, loc.lon, loc.area)
+      .then((data) => { if (!cancelled) setLiveRisk(data); })
+      .catch(() => { if (!cancelled) setLiveRisk(null); })
+      .finally(() => { if (!cancelled) setRiskLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, loc.lat, loc.lon, loc.area]);
+
+  // Real backend-predicted score when available; static disclosed estimate otherwise.
+  const riskScore = liveRisk ? liveRisk.heat_risk_score : 50;
+  const riskLevelLabel = liveRisk ? liveRisk.risk_level.replace(' Heat Risk', '') : 'Moderate';
+  const riskColor = getRiskColor(riskScore);
+
+  const riskTimeline = liveRisk
+    ? liveRisk.forecast.map((f) => ({
+        time: f.time,
+        risk: f.risk_level,
+        score: f.heat_risk,
+        color: getRiskColor(f.heat_risk)
+      }))
+    : [
+        { time: '09:00 AM', risk: 'Moderate', score: 45, color: '#eab308' },
+        { time: '12:00 PM', risk: 'High', score: 78, color: '#f97316' },
+        { time: '03:00 PM', risk: 'Severe', score: 88, color: '#ef4444' },
+        { time: '06:00 PM', risk: 'High', score: 65, color: '#f97316' },
+        { time: '09:00 PM', risk: 'Moderate', score: 35, color: '#eab308' }
+      ];
 
   const insights = [
     {
@@ -88,14 +131,6 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
       desc: 'Sustained heavy physical labor under direct sunlight rapidly exhausts body electrolytes.',
       advice: 'Mandate 15-minute rest breaks every hour in shade with electrolyte hydration.'
     }
-  ];
-
-  const riskTimeline = [
-    { time: '09:00 AM', risk: 'Moderate', score: 45, color: '#eab308' },
-    { time: '12:00 PM', risk: 'High', score: 78, color: '#f97316' },
-    { time: '03:00 PM', risk: 'Severe', score: 88, color: '#ef4444' },
-    { time: '06:00 PM', risk: 'High', score: 65, color: '#f97316' },
-    { time: '09:00 PM', risk: 'Moderate', score: 35, color: '#eab308' }
   ];
 
   return (
@@ -145,7 +180,7 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
           </div>
 
           <div className="grid-half">
-            <HeatTrendChart />
+            <HeatTrendChart points={trendPoints} loading={trendLoading} />
           </div>
           <div className="grid-half">
             <AreaComparison />
@@ -196,14 +231,14 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
           {/* Risk Score Indicator Card */}
           <div className="card-full risk-score-card">
             <div className="score-badge-circle" style={{ borderColor: riskColor, color: riskColor }}>
-              <span className="num">{riskResult.score}</span>
+              {riskLoading ? <Loader2 size={22} className="animate-spin" /> : <span className="num">{riskScore}</span>}
               <span className="denom">/ 100</span>
             </div>
 
             <div className="score-info">
               <div className="status-tag" style={{ backgroundColor: `${riskColor}20`, color: riskColor, borderColor: riskColor }}>
                 <ShieldAlert size={16} />
-                <span>{riskResult.riskLevel} Heat Risk Status</span>
+                <span>{riskLevelLabel} Heat Risk Status</span>
               </div>
               <h2>Environmental Vulnerability Index</h2>
               <p className="score-desc">
@@ -211,7 +246,7 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
               </p>
               <div className="disclaimer-note">
                 <AlertTriangle size={14} className="text-amber" />
-                <span>Note: This is an application-generated environmental risk indicator based on ambient microclimate data.</span>
+                <span>Note: This score is predicted by the trained heat-risk model for {loc.area}, based on live environmental factors at this location.</span>
               </div>
             </div>
           </div>

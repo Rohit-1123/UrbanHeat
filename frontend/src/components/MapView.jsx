@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Rectangle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Star } from 'lucide-react';
 import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 
 // Fix Leaflet default marker icons in React Vite bundle
@@ -156,7 +157,9 @@ const MapView = ({
             }}
           >
             <Popup>
-              <strong style={{ color: '#10b981' }}>Coolest Route (Shaded Canopy) ⭐ Recommended</strong><br />
+              <strong style={{ color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                Coolest Route (Shaded Canopy) <Star size={13} fill="#10b981" strokeWidth={0} /> Recommended
+              </strong><br />
               Distance: {routes.coolest_route.distance_km} km<br />
               Duration: {routes.coolest_route.duration_minutes} min<br />
               Avg Heat Risk: {routes.coolest_route.average_heat_risk}/100<br />
@@ -169,7 +172,10 @@ const MapView = ({
         {startCoords && isWithinSrmCampus(startCoords.lat, startCoords.lon) && (
           <Marker position={[startCoords.lat, startCoords.lon]} icon={startIcon}>
             <Popup>
-              <strong>🟢 Start Location</strong><br />
+              <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                Start Location
+              </strong><br />
               Lat: {startCoords.lat}, Lon: {startCoords.lon}
             </Popup>
           </Marker>
@@ -179,7 +185,10 @@ const MapView = ({
         {endCoords && isWithinSrmCampus(endCoords.lat, endCoords.lon) && (
           <Marker position={[endCoords.lat, endCoords.lon]} icon={endIcon}>
             <Popup>
-              <strong>🔴 Destination</strong><br />
+              <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                Destination
+              </strong><br />
               Lat: {endCoords.lat}, Lon: {endCoords.lon}
             </Popup>
           </Marker>

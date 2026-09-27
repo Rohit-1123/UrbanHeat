@@ -250,13 +250,21 @@ class RouteService:
                 "steps": [step for leg in raw_route.get("legs", []) for step in leg.get("steps", [])]
             })
 
-        route_options = [
+        campus_route_options = [
             option for option in route_options
             if route_geometry_is_within_srm_campus(option["coords"])
         ]
 
-        if not route_options:
+        if not campus_route_options:
+            if route_options:
+                raise ValueError(
+                    "No mapped walking path stays within the SRM campus between these two points "
+                    "(the nearest route detours onto public roads outside campus). Try selecting "
+                    "locations that are closer together or connected by an internal campus path."
+                )
             raise ValueError("Routing provider returned no usable route geometry")
+
+        route_options = campus_route_options
 
         mapped_route_count = len(route_options)
 

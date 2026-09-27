@@ -105,4 +105,108 @@ class HeatService:
 
         return risk_score, risk_level, env_data
 
+    @staticmethod
+    def compute_hourly_trend(db: Session, lat: float, lon: float) -> List[Dict[str, Any]]:
+        """
+        Derives a real, model-driven diurnal heat trend for a location by feeding the
+        trained ML model a typical Chennai temperature/UV diurnal curve while holding
+        that location's real vegetation/building/shade factors constant. This replaces
+        a static mocked trend with an actual per-location prediction curve.
+        """
+        _, _, env = HeatService.evaluate_coordinate_heat_risk(db, lat, lon)
+        base_temp = env["temperature"]
+        vegetation_index = env["vegetation_index"]
+        building_density = env["building_density"]
+        shade_score = env["shade_score"]
+
+        # (hour label, temp offset from base, uv index for that hour)
+        diurnal_curve = [
+            ("6 AM", -7.0, 2.0),
+            ("9 AM", -3.0, 6.0),
+            ("12 PM", 1.5, 9.5),
+            ("3 PM", 2.5, 8.5),
+            ("6 PM", -1.0, 3.5),
+            ("9 PM", -4.5, 0.0),
+        ]
+
+        points = []
+        for hour_label, temp_offset, uv in diurnal_curve:
+            hour_temp = round(base_temp + temp_offset, 1)
+            humidity = env["humidity"]
+            risk_score, risk_level = ml_service.predict(
+                hour_temp, humidity, uv, vegetation_index, building_density, shade_score
+            )
+            points.append({
+                "hour": hour_label,
+                "temperature": hour_temp,
+                "heat_risk": round(risk_score, 1),
+                "risk_level": risk_level
+            })
+
+        return points
+
+    @staticmethod
+    def build_recommendations(db: Session, lat: float, lon: float) -> Tuple[float, str, List[Dict[str, str]]]:
+        """
+        Ranks mitigation actions using the location's real environmental factors instead
+        of a static recommendation list, so advice actually reflects what is driving risk
+        at that specific coordinate (low canopy, high building density, low shade, etc).
+        """
+        risk_score, risk_level, env = HeatService.evaluate_coordinate_heat_risk(db, lat, lon)
+
+        candidates = []
+
+        if env["vegetation_index"] < 0.35:
+            candidates.append({
+                "title": "Seek Tree Canopy",
+                "description": f"This area has low vegetation cover ({int(env['vegetation_index'] * 100)}%). Prefer routes through parks or tree-lined paths where possible.",
+                "icon": "tree",
+                "priority": "high",
+                "reason": "low_vegetation"
+            })
+        if env["building_density"] > 0.6:
+            candidates.append({
+                "title": "Avoid Peak Concrete Exposure",
+                "description": f"Building/pavement density here is high ({int(env['building_density'] * 100)}%), which traps and re-radiates heat. Avoid lingering outdoors between 12-3 PM.",
+                "icon": "building",
+                "priority": "high",
+                "reason": "high_building_density"
+            })
+        if env["shade_score"] < 0.3:
+            candidates.append({
+                "title": "Use Shaded Walkways",
+                "description": f"Shade coverage is limited ({int(env['shade_score'] * 100)}%). Carry an umbrella or wear a wide-brimmed hat if crossing this zone.",
+                "icon": "umbrella",
+                "priority": "medium",
+                "reason": "low_shade"
+            })
+        if env["uv_index"] >= 8:
+            candidates.append({
+                "title": "Apply Sun Protection",
+                "description": f"UV index is elevated ({env['uv_index']}). Apply sunscreen (SPF 30+) and wear sunglasses if outdoors for extended periods.",
+                "icon": "sun",
+                "priority": "medium",
+                "reason": "high_uv"
+            })
+
+        candidates.append({
+            "title": "Stay Hydrated",
+            "description": "Carry water and drink regularly, especially if this location's predicted heat risk is Moderate or higher.",
+            "icon": "water",
+            "priority": "low",
+            "reason": "general"
+        })
+        candidates.append({
+            "title": "Travel Smart",
+            "description": "Plan intensive outdoor activity for early morning or evening hours to avoid this location's peak thermal exposure window.",
+            "icon": "clock",
+            "priority": "low",
+            "reason": "general"
+        })
+
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        candidates.sort(key=lambda c: priority_order[c["priority"]])
+
+        return risk_score, risk_level, candidates
+
 heat_service = HeatService()

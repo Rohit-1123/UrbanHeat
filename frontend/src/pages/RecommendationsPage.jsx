@@ -1,27 +1,61 @@
-import React, { useState } from 'react';
-import { MOCK_RECOMMENDATIONS } from '../data/mockData';
-import { ShieldCheck, Droplets, Sun, TreeDeciduous, Home, Leaf, GlassWater, Lightbulb, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  ShieldCheck, Droplets, Sun, TreeDeciduous, Umbrella, Clock, Building2,
+  Lightbulb, CheckCircle2, Loader2, AlertCircle
+} from 'lucide-react';
+import { getRecommendations } from '../services/api';
+
+const ICON_MAP = {
+  tree: TreeDeciduous,
+  building: Building2,
+  umbrella: Umbrella,
+  sun: Sun,
+  water: Droplets,
+  clock: Clock,
+};
 
 const RecommendationsPage = ({ currentLocation }) => {
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [recommendations, setRecommendations] = useState([]);
+  const [riskScore, setRiskScore] = useState(null);
+  const [riskLevel, setRiskLevel] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const categories = ['All', 'Personal Safety', 'Community Actions', 'Urban Planning Solutions'];
+  const lat = currentLocation?.latitude ?? currentLocation?.lat;
+  const lon = currentLocation?.longitude ?? currentLocation?.lon;
+  const areaName = currentLocation?.area || currentLocation?.name || 'Your Selected Urban Zone';
 
-  const filtered = selectedCategory === 'All'
-    ? MOCK_RECOMMENDATIONS
-    : MOCK_RECOMMENDATIONS.filter((r) => r.category === selectedCategory);
+  useEffect(() => {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
-  const getCategoryIcon = (cat) => {
-    if (cat === 'Personal Safety') return ShieldCheck;
-    if (cat === 'Community Actions') return TreeDeciduous;
-    return Home;
-  };
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    getRecommendations(lat, lon, areaName)
+      .then((data) => {
+        if (cancelled) return;
+        setRecommendations(data.recommendations || []);
+        setRiskScore(data.heat_risk_score);
+        setRiskLevel(data.risk_level);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError('Could not load live recommendations for this location. Please try again shortly.');
+        setRecommendations([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [lat, lon, areaName]);
 
   return (
     <div className="page-container recommendations-page">
       <div className="page-header">
         <h1 className="page-title">Practical Heat Mitigation & Recommendations</h1>
-        <p className="page-subtitle">Actionable solutions for personal health safety, community response, and sustainable urban infrastructure</p>
+        <p className="page-subtitle">Actionable solutions ranked by the real environmental risk factors at your selected location</p>
       </div>
 
       {/* Personalized Recommendation Banner for Selected Area */}
@@ -30,54 +64,60 @@ const RecommendationsPage = ({ currentLocation }) => {
           <Lightbulb size={24} className="text-emerald" />
         </div>
         <div className="banner-text">
-          <h3>Recommended for {currentLocation?.area || 'Your Selected Urban Zone'}</h3>
+          <h3>Recommended for {areaName}</h3>
           <p>
-            {currentLocation?.vegetationIndex < 0.3
-              ? 'Low vegetation cover detected in this zone. Priority action: Expand urban tree canopy & shaded pedestrian sails.'
-              : 'Moderate heat stress detected. Priority action: Maintain active hydration & avoid direct sunlight during peak 12 PM - 4 PM hours.'}
+            {riskLevel
+              ? `Predicted heat risk here is ${riskScore}/100 (${riskLevel}). See prioritized actions below.`
+              : 'Select a location on the map or via search to see recommendations tailored to its real heat-risk factors.'}
           </p>
         </div>
       </div>
 
-      {/* Category Filter Tabs */}
-      <div className="category-filter-bar">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            className={`btn-category-tab ${selectedCategory === cat ? 'active' : ''}`}
-            onClick={() => setSelectedCategory(cat)}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
+      {loading && (
+        <div className="rec-status-row">
+          <Loader2 size={18} className="animate-spin text-emerald" />
+          <span>Computing recommendations for this location...</span>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="rec-status-row">
+          <AlertCircle size={18} className="text-red" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {!loading && !error && !Number.isFinite(lat) && (
+        <div className="rec-status-row">
+          <AlertCircle size={18} />
+          <span>No location selected yet. Choose a campus location from the map or search to get personalized recommendations.</span>
+        </div>
+      )}
 
       {/* Recommendations Cards Grid */}
-      <div className="recommendations-grid">
-        {filtered.map((rec) => {
-          const Icon = getCategoryIcon(rec.category);
+      {recommendations.length > 0 && (
+        <div className="recommendations-grid">
+          {recommendations.map((rec, idx) => {
+            const Icon = ICON_MAP[rec.icon] || ShieldCheck;
 
-          return (
-            <div key={rec.id} className="recommendation-card">
-              <div className="rec-card-top">
-                <div className="rec-icon-box">
-                  <Icon size={20} className="text-emerald" />
+            return (
+              <div key={`${rec.title}-${idx}`} className="recommendation-card">
+                <div className="rec-card-top">
+                  <div className="rec-icon-box">
+                    <Icon size={20} className="text-emerald" />
+                  </div>
+                  <span className={`impact-badge ${rec.priority}`}>
+                    <CheckCircle2 size={12} /> Priority: {rec.priority.charAt(0).toUpperCase() + rec.priority.slice(1)}
+                  </span>
                 </div>
-                <span className={`impact-badge ${rec.impactLevel.toLowerCase()}`}>
-                  <CheckCircle2 size={12} /> Potential Impact: {rec.impactLevel}
-                </span>
-              </div>
 
-              <h4 className="rec-title">{rec.title}</h4>
-              <p className="rec-desc">{rec.description}</p>
-
-              <div className="rec-card-footer">
-                <span className="category-tag">{rec.category}</span>
+                <h4 className="rec-title">{rec.title}</h4>
+                <p className="rec-desc">{rec.description}</p>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

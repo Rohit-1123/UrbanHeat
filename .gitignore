@@ -13,6 +13,7 @@ backend/__pycache__/
 backend/app/__pycache__/
 backend/app/*/__pycache__/
 backend/ml/__pycache__/
+backend/.venv/
 
 # Environment & Model Files
 .env

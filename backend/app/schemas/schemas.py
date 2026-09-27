@@ -96,3 +96,28 @@ class LocationDetailResponse(BaseModel):
     warning_message: str
     forecast: List[ForecastHour]
     recommendations: List[Dict[str, str]]
+
+class HeatTrendPoint(BaseModel):
+    hour: str
+    temperature: float
+    heat_risk: float
+    risk_level: str
+
+class HeatTrendResponse(BaseModel):
+    location_name: str
+    peak_hour: str
+    peak_heat_risk: float
+    points: List[HeatTrendPoint]
+
+class RecommendationItem(BaseModel):
+    title: str
+    description: str
+    icon: str
+    priority: str  # "high", "medium", "low"
+    reason: str
+
+class RecommendationsResponse(BaseModel):
+    location_name: str
+    heat_risk_score: float
+    risk_level: str
+    recommendations: List[RecommendationItem]

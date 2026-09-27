@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LocationSearch from '../components/LocationSearch';
 import HeatOverviewCard from '../components/HeatOverviewCard';
 import { MapPin, Database, Cpu, ShieldAlert, Lightbulb, ArrowRight, Sparkles, Map, Loader2 } from 'lucide-react';
@@ -23,6 +23,15 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
       setSyncingWeather(false);
     }
   };
+
+  // Auto-load live weather for the default/current location on first mount,
+  // so the overview card shows real data without requiring a manual sync click.
+  useEffect(() => {
+    if (!currentLocation?.source) {
+      handleSyncWeather();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const steps = [
     {

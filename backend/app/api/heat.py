@@ -6,7 +6,8 @@ from typing import List, Optional
 from app.database.connection import get_db
 from app.schemas.schemas import (
     HeatPredictionInput, HeatPredictionOutput, HeatPointResponse,
-    LocationDetailRequest, LocationDetailResponse
+    LocationDetailRequest, LocationDetailResponse,
+    HeatTrendResponse, RecommendationsResponse
 )
 from app.services.ml_service import ml_service
 from app.services.heat_service import heat_service
@@ -153,3 +154,55 @@ def get_location_heat_detail(data: LocationDetailRequest, db: Session = Depends(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating location heat detail: {str(e)}")
+
+@router.get("/heat-trend", response_model=HeatTrendResponse)
+def get_heat_trend(
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+    location_name: Optional[str] = Query("Selected Area"),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns a real, model-driven diurnal heat-risk trend for a coordinate by running
+    the trained ML model across a typical daily temperature/UV curve, instead of a
+    static mocked chart.
+    """
+    if not is_within_srm_campus(lat, lon):
+        raise HTTPException(status_code=400, detail="Heat trend analysis is limited to the SRM Kattankulathur campus area.")
+
+    try:
+        points = heat_service.compute_hourly_trend(db, lat, lon)
+        peak = max(points, key=lambda p: p["heat_risk"])
+        return HeatTrendResponse(
+            location_name=location_name or "Selected Area",
+            peak_hour=peak["hour"],
+            peak_heat_risk=peak["heat_risk"],
+            points=points
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error computing heat trend: {str(e)}")
+
+@router.get("/recommendations", response_model=RecommendationsResponse)
+def get_recommendations(
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+    location_name: Optional[str] = Query("Selected Area"),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns mitigation recommendations ranked by that specific coordinate's real
+    environmental risk factors, instead of a static recommendation list.
+    """
+    if not is_within_srm_campus(lat, lon):
+        raise HTTPException(status_code=400, detail="Recommendations are limited to the SRM Kattankulathur campus area.")
+
+    try:
+        score, risk_level, recommendations = heat_service.build_recommendations(db, lat, lon)
+        return RecommendationsResponse(
+            location_name=location_name or "Selected Area",
+            heat_risk_score=round(score, 1),
+            risk_level=risk_level,
+            recommendations=recommendations
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
