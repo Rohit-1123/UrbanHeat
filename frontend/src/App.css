@@ -3387,6 +3387,246 @@ body {
 }
 
 /* ==========================================================================
+   Microclimate ML Risk Simulator
+   ========================================================================== */
+.simulator-card-wide {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.card-top-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.card-top-header h2 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.card-top-header p {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.icon-circle {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--surface-secondary);
+}
+
+.icon-circle.shadow-emerald {
+  background: var(--environment-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.simulator-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .simulator-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sliders-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.slider-card-light {
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.slider-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.slider-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.slider-val-badge {
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.slider-val-badge.red { background: var(--danger-soft); color: var(--danger); }
+.slider-val-badge.blue { background: var(--info-soft); color: var(--info); }
+.slider-val-badge.green { background: var(--environment-soft); color: var(--environment); }
+.slider-val-badge.purple { background: var(--heat-soft); color: var(--heat-orange); }
+
+/* Custom-styled range slider: a filled track up to the thumb position
+   (driven by the --fill-pct custom property set inline per slider) plus a
+   themed thumb, since the browser default control doesn't fit the app's
+   design tokens. */
+.sim-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(to right, var(--sim-accent, var(--primary)) 0%, var(--sim-accent, var(--primary)) var(--fill-pct, 50%), var(--border) var(--fill-pct, 50%), var(--border) 100%);
+}
+
+.sim-slider-red { --sim-accent: var(--danger); }
+.sim-slider-blue { --sim-accent: var(--info); }
+.sim-slider-green { --sim-accent: var(--environment); }
+.sim-slider-purple { --sim-accent: var(--heat-orange); }
+
+.sim-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--sim-accent, var(--primary));
+  border: 3px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--sim-accent, var(--primary));
+  cursor: pointer;
+}
+
+.sim-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--sim-accent, var(--primary));
+  border: 3px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--sim-accent, var(--primary));
+  cursor: pointer;
+}
+
+.sim-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.result-column {
+  display: flex;
+}
+
+.prediction-box-light {
+  width: 100%;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.prediction-label {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.loading-prediction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.risk-score-display {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 3.2rem;
+}
+
+.risk-score-display.low { color: var(--environment); }
+.risk-score-display.moderate { color: var(--heat-amber); }
+.risk-score-display.high { color: var(--danger); }
+
+.risk-denom {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.risk-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.risk-pill.pill-red { background: var(--danger-soft); color: var(--danger); }
+.risk-pill.pill-amber { background: var(--heat-soft); color: var(--heat-amber); }
+.risk-pill.pill-green { background: var(--environment-soft); color: var(--environment); }
+
+.sim-offline-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.prediction-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+/* ==========================================================================
    Cool Route Finder Interface Styles
    ========================================================================== */
 .route-finder-container {
@@ -3419,6 +3659,27 @@ body {
 .route-state-error {
   border-color: rgba(239, 68, 68, 0.35);
   color: var(--danger);
+}
+
+.btn-suggested-preset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 9px 16px;
+  border-radius: var(--radius-control, 8px);
+  border: 1px solid var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-suggested-preset:hover {
+  background: var(--primary);
+  color: var(--primary-contrast);
 }
 
 .route-highlight-banner {

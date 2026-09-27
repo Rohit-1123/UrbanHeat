@@ -135,11 +135,54 @@ const RouteFinderView = ({
   );
 
   if (!hasCompleteRouteData) {
+    // Suggest the nearest campus preset route that's known to have a
+    // verified mapped path, instead of a generic "try again" message.
+    const isSamePreset = (preset) => (
+      startCoords && endCoords
+      && Math.abs(preset.start.lat - startCoords.lat) < 1e-5
+      && Math.abs(preset.start.lon - startCoords.lon) < 1e-5
+      && Math.abs(preset.end.lat - endCoords.lat) < 1e-5
+      && Math.abs(preset.end.lon - endCoords.lon) < 1e-5
+    );
+
+    const anchor = startCoords?.lat && startCoords?.lon ? startCoords : endCoords;
+    let suggestedPreset = null;
+    if (anchor?.lat && anchor?.lon) {
+      let bestDist = Infinity;
+      for (const preset of presets) {
+        if (isSamePreset(preset)) continue;
+        const dist = Math.min(
+          Math.hypot(preset.start.lat - anchor.lat, preset.start.lon - anchor.lon),
+          Math.hypot(preset.end.lat - anchor.lat, preset.end.lon - anchor.lon)
+        );
+        if (dist < bestDist) {
+          bestDist = dist;
+          suggestedPreset = preset;
+        }
+      }
+    }
+
     return (
       <div className="route-state-panel route-state-error" role="alert">
         <Navigation size={22} />
         <strong>{error || 'Choose two SRM campus locations to find a verified coolest route.'}</strong>
         <span>Use the campus presets, enter coordinates, or place both pins inside the dashed SRM boundary.</span>
+        {suggestedPreset && (
+          <button
+            type="button"
+            className="btn-suggested-preset"
+            onClick={() => {
+              setStartLat(suggestedPreset.start.lat.toString());
+              setStartLon(suggestedPreset.start.lon.toString());
+              setEndLat(suggestedPreset.end.lat.toString());
+              setEndLon(suggestedPreset.end.lon.toString());
+              onSelectPreset(suggestedPreset);
+            }}
+          >
+            <MapPin size={13} />
+            <span>Try a verified route instead: {suggestedPreset.name}</span>
+          </button>
+        )}
       </div>
     );
   }
