@@ -168,14 +168,16 @@ Open `http://localhost:5173` in your browser.
 | `GET` | `/api/location-search?q=...` | Searches mapped SRM campus places through OpenStreetMap. |
 | `POST` | `/api/recommend-route` | Calculates and ranks mapped routes, returning the verified coolest route and supporting metrics. |
 | `POST` | `/api/route-heat` | Analyzes point-by-point heat exposure along a given geometry path. |
+| `GET` | `/api/heat-trend?lat=&lon=` | Real, model-driven diurnal heat-risk trend for a coordinate (runs the ML model across a daily temperature/UV curve). |
+| `GET` | `/api/recommendations?lat=&lon=` | Mitigation recommendations ranked by that coordinate's actual environmental risk factors. |
 
 ### Sample Route Recommendation Request (`POST /api/recommend-route`)
 ```json
 {
   "start_lat": 12.8232,
   "start_lon": 80.0450,
-  "end_lat": 12.8265,
-  "end_lon": 80.0382
+  "end_lat": 12.8232845,
+  "end_lon": 80.0425857
 }
 ```
 

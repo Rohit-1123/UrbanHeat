@@ -2,6 +2,8 @@ import math
 import requests
 import numpy as np
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -9,6 +11,20 @@ from app.services.heat_service import heat_service, haversine_distance
 from app.services.campus_config import route_geometry_is_within_srm_campus
 
 OSRM_BASE_URL = "https://routing.openstreetmap.de/routed-foot/route/v1/driving"
+
+# Every request hits the public OSRM server at least 3 times sequentially
+# (snap start, snap end, route) — each a real network round-trip, ~1.5-2s
+# apiece. The same start/end pairs get requested constantly in practice
+# (the page's own default route on every load, the campus preset buttons),
+# so a short-lived cache turns those repeat requests instant instead of
+# re-paying the full ~4-5s external round-trip every single time.
+_ROUTE_CACHE_TTL_SECONDS = 300
+_ROUTE_CACHE: Dict[tuple, tuple] = {}
+_ROUTE_CACHE_LOCK = threading.Lock()
+
+
+def _route_cache_key(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> tuple:
+    return (round(start_lat, 5), round(start_lon, 5), round(end_lat, 5), round(end_lon, 5))
 
 class RouteService:
     @staticmethod
@@ -222,8 +238,29 @@ class RouteService:
 
     @staticmethod
     def process_and_recommend_routes(db: Session, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
-        snapped_start_lat, snapped_start_lon, start_snap_distance = RouteService.snap_to_walkable_point(start_lat, start_lon)
-        snapped_end_lat, snapped_end_lon, end_snap_distance = RouteService.snap_to_walkable_point(end_lat, end_lon)
+        cache_key = _route_cache_key(start_lat, start_lon, end_lat, end_lon)
+        now = time.monotonic()
+        with _ROUTE_CACHE_LOCK:
+            cached = _ROUTE_CACHE.get(cache_key)
+            if cached and now - cached[0] < _ROUTE_CACHE_TTL_SECONDS:
+                return deepcopy(cached[1])
+
+        result = RouteService._compute_route_recommendation(db, start_lat, start_lon, end_lat, end_lon)
+
+        with _ROUTE_CACHE_LOCK:
+            _ROUTE_CACHE[cache_key] = (now, deepcopy(result))
+        return result
+
+    @staticmethod
+    def _compute_route_recommendation(db: Session, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
+        # The start/end snap calls are independent OSRM requests — running them
+        # concurrently instead of one-after-another cuts a real ~1.5-2s off
+        # every single request, cached or not.
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            start_future = executor.submit(RouteService.snap_to_walkable_point, start_lat, start_lon)
+            end_future = executor.submit(RouteService.snap_to_walkable_point, end_lat, end_lon)
+            snapped_start_lat, snapped_start_lon, start_snap_distance = start_future.result()
+            snapped_end_lat, snapped_end_lon, end_snap_distance = end_future.result()
 
         if not route_geometry_is_within_srm_campus([
             [snapped_start_lat, snapped_start_lon],
@@ -250,13 +287,21 @@ class RouteService:
                 "steps": [step for leg in raw_route.get("legs", []) for step in leg.get("steps", [])]
             })
 
-        route_options = [
+        campus_route_options = [
             option for option in route_options
             if route_geometry_is_within_srm_campus(option["coords"])
         ]
 
-        if not route_options:
+        if not campus_route_options:
+            if route_options:
+                raise ValueError(
+                    "No mapped walking path stays within the SRM campus between these two points "
+                    "(the nearest route detours onto public roads outside campus). Try selecting "
+                    "locations that are closer together or connected by an internal campus path."
+                )
             raise ValueError("Routing provider returned no usable route geometry")
+
+        route_options = campus_route_options
 
         mapped_route_count = len(route_options)
 

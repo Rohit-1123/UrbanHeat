@@ -39,11 +39,16 @@ def seed_database():
             db.query(HeatData).delete()
             db.commit()
 
-        print("🌍 Generating realistic spatial heat data for SRM Kattankulathur / Chennai region...")
-        
-        # Grid parameters centered on SRM University / Kattankulathur (12.823, 80.045)
-        min_lat, max_lat = 12.780, 12.870
-        min_lon, max_lon = 80.000, 80.090
+        print("🌍 Generating realistic spatial heat data for the SRM Kattankulathur campus...")
+
+        # Grid parameters covering the actual campus area the app displays and
+        # routes within (see SRM_CAMPUS_BOUNDS in app/services/campus_config.py).
+        # Earlier this grid spanned a much wider 10km-square "Chennai region" at
+        # ~666m spacing, so only ~4 of 256 points ever landed inside the tight
+        # campus box the frontend/backend actually query against. Match the grid
+        # to the real display area instead so it's densely covered.
+        min_lat, max_lat = 12.8188, 12.8280
+        min_lon, max_lon = 80.0372, 80.0516
 
         lat_steps = np.linspace(min_lat, max_lat, 16)
         lon_steps = np.linspace(min_lon, max_lon, 16)
@@ -54,21 +59,23 @@ def seed_database():
 
         for lat in lat_steps:
             for lon in lon_steps:
-                # Add slight spatial jitter
-                lat_j = round(lat + random.uniform(-0.001, 0.001), 6)
-                lon_j = round(lon + random.uniform(-0.001, 0.001), 6)
+                # Add slight spatial jitter (scaled down to fit the smaller grid spacing)
+                lat_j = round(lat + random.uniform(-0.0002, 0.0002), 6)
+                lon_j = round(lon + random.uniform(-0.0003, 0.0003), 6)
 
-                # Distance from urban center (SRM Main Gate / GST Road ~ 12.823, 80.045)
+                # Distance from the dense academic/tech-park core (~12.823, 80.045)
                 dist_from_urban = np.sqrt((lat_j - 12.823)**2 + (lon_j - 80.045)**2)
-                
-                # Distance from lake / green park area (~ 12.815, 80.030)
-                dist_from_green = np.sqrt((lat_j - 12.815)**2 + (lon_j - 80.030)**2)
 
-                # High building density near urban center
-                building_density = round(float(np.clip(0.85 - dist_from_urban * 8.0 + random.uniform(-0.1, 0.1), 0.1, 0.95)), 2)
-                
-                # High vegetation near green area / lake
-                vegetation_index = round(float(np.clip(0.80 - dist_from_green * 7.0 + random.uniform(-0.1, 0.1), 0.05, 0.90)), 2)
+                # Distance from the sports complex / cricket ground green belt (~12.8255, 80.0470)
+                dist_from_green = np.sqrt((lat_j - 12.8255)**2 + (lon_j - 80.0470)**2)
+
+                # High building density near the academic/tech-park core.
+                # Multiplier rescaled for the campus-sized grid (~0.017 deg diagonal,
+                # vs. the ~0.13 deg diagonal this formula was originally tuned for).
+                building_density = round(float(np.clip(0.85 - dist_from_urban * 45.0 + random.uniform(-0.1, 0.1), 0.1, 0.95)), 2)
+
+                # High vegetation near the sports complex green belt
+                vegetation_index = round(float(np.clip(0.80 - dist_from_green * 44.0 + random.uniform(-0.1, 0.1), 0.05, 0.90)), 2)
                 
                 shade_score = round(float(np.clip(vegetation_index * 0.7 + random.uniform(-0.05, 0.15), 0.05, 0.85)), 2)
                 

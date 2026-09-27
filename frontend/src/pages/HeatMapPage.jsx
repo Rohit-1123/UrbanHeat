@@ -14,7 +14,6 @@ import {
   ShieldAlert,
   AlertCircle
 } from 'lucide-react';
-import { MOCK_LOCATIONS } from '../data/mockData';
 import { estimateMicroclimateForCoords } from '../utils/riskCalculator';
 import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 
@@ -29,7 +28,8 @@ const HeatMapPage = ({
   const [activeLayer, setActiveLayer] = useState('heat_intensity');
   const [geoError, setGeoError] = useState(null);
   const [centerLoc, setCenterLoc] = useState(currentLocation);
-  const campusLocations = MOCK_LOCATIONS.filter((location) => isWithinSrmCampus(location.latitude ?? location.lat, location.longitude ?? location.lon));
+  // Real, hand-curated SRM campus places (name + coordinates) — not mock data.
+  const campusLocations = SRM_CAMPUS.places.filter((location) => isWithinSrmCampus(location.lat, location.lon));
 
   const layers = [
     { id: 'heat_intensity', label: 'Heat Intensity', icon: Flame, desc: 'Overall urban thermal distribution' },
@@ -47,15 +47,18 @@ const HeatMapPage = ({
   };
 
   const handleSelectPointFromMap = (pt) => {
-    // Check if matching location in MOCK_LOCATIONS or format new location
+    // Borrow the human-friendly place name/category from the real SRM campus
+    // place list when this heatmap point sits near a named location, but
+    // always source the actual metrics from the live heatmap point itself.
     const matched = campusLocations.find(
       (l) => Math.abs(l.lat - pt.latitude) < 0.005 && Math.abs(l.lon - pt.longitude) < 0.005
     );
 
-    const target = matched || {
+    const target = {
       id: `pt-${pt.id}`,
       city: 'SRM Kattankulathur',
-      area: pt.name,
+      area: matched?.name || pt.name,
+      category: matched?.category,
       lat: pt.latitude,
       lon: pt.longitude,
       latitude: pt.latitude,

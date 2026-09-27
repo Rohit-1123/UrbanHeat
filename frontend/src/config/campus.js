@@ -66,11 +66,15 @@ export const SRM_CAMPUS = {
   ]
 };
 
+// Mirrors the backend's padding in app/services/campus_config.py so mapped
+// footpaths that hug the campus boundary aren't dropped client-side either.
+const BOUNDS_MARGIN_DEG = 0.0008; // ~90m at this latitude
+
 export const isWithinSrmCampus = (lat, lon) => (
   Number.isFinite(lat)
   && Number.isFinite(lon)
-  && lat >= SRM_CAMPUS.bounds[0][0]
-  && lat <= SRM_CAMPUS.bounds[1][0]
-  && lon >= SRM_CAMPUS.bounds[0][1]
-  && lon <= SRM_CAMPUS.bounds[1][1]
+  && lat >= SRM_CAMPUS.bounds[0][0] - BOUNDS_MARGIN_DEG
+  && lat <= SRM_CAMPUS.bounds[1][0] + BOUNDS_MARGIN_DEG
+  && lon >= SRM_CAMPUS.bounds[0][1] - BOUNDS_MARGIN_DEG
+  && lon <= SRM_CAMPUS.bounds[1][1] + BOUNDS_MARGIN_DEG
 );

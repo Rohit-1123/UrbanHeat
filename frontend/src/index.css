@@ -1,17 +1,21 @@
 :root {
-  --bg-dark: #0f172a;
-  --bg-card: #1e293b;
-  --bg-card-hover: #334155;
-  --primary: #0284c7;
-  --primary-hover: #0369a1;
-  --cool-teal: #10b981;
-  --hot-amber: #f59e0b;
-  --hot-red: #ef4444;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #334155;
-  --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --heading-font: 'Outfit', sans-serif;
+  --bg-dark: #0B1210;
+  --bg-card: #131F1B;
+  --bg-card-hover: #1B2B25;
+  --primary: #3FA796;
+  --primary-hover: #2E8577;
+  --cool-teal: #3FA796;
+  --heat-moderate: #D9A441;
+  --hot-amber: #D9722C;
+  --hot-red: #C6432E;
+  --text-main: #EDF3EE;
+  --text-muted: #8FA79C;
+  --border-color: #24352E;
+  --font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-font: 'Sora', sans-serif;
+  --mono-font: 'IBM Plex Mono', 'SF Mono', monospace;
+  --radius-panel: 3px;
+  --radius-control: 8px;
 }
 
 * {

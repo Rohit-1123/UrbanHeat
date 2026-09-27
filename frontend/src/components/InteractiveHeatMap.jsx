@@ -1,18 +1,25 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   MapContainer,
   TileLayer,
-  Circle,
   CircleMarker,
-  Popup,
   Rectangle,
   useMap,
   useMapEvents
 } from 'react-leaflet';
 import L from 'leaflet';
-import { Plus, Minus, Maximize2, Crosshair, MapPin } from 'lucide-react';
-import { getRiskColor } from '../utils/riskCalculator';
+import 'leaflet.heat';
+import { Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import { SRM_CAMPUS } from '../config/campus';
+
+// Heat-severity spectrum, matching the app's design tokens in index.css
+// (--cool-teal / --heat-moderate / --hot-amber / --hot-red).
+const HEAT_GRADIENT = {
+  0.0: '#3FA796',
+  0.4: '#D9A441',
+  0.7: '#D9722C',
+  1.0: '#C6432E'
+};
 
 // Fix Leaflet marker icon asset paths
 delete L.Icon.Default.prototype._getIconUrl;
@@ -101,6 +108,60 @@ const CustomMapControls = ({ onResetView, onUseMyLocation }) => {
   );
 };
 
+// Renders the spatial heat data as one smooth continuous gradient (like a
+// weather radar overlay) instead of hundreds of discrete overlapping circles.
+const HeatGradientLayer = ({ points, getIntensity }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+
+    const heatPoints = points.map((pt) => [
+      pt.latitude ?? pt.lat,
+      pt.longitude ?? pt.lon,
+      getIntensity(pt)
+    ]);
+
+    const heatLayer = L.heatLayer(heatPoints, {
+      radius: 32,
+      blur: 24,
+      maxZoom: 17,
+      max: 1.0,
+      gradient: HEAT_GRADIENT
+    }).addTo(map);
+
+    return () => {
+      map.removeLayer(heatLayer);
+    };
+  }, [points, getIntensity, map]);
+
+  return null;
+};
+
+// Since the heat data is now a canvas gradient with no per-point DOM elements
+// to attach click handlers to, clicking the map instead finds and selects the
+// nearest underlying data point.
+const HeatClickHandler = ({ points, onSelectPoint }) => {
+  useMapEvents({
+    click(e) {
+      if (!onSelectPoint || !points || points.length === 0) return;
+      let nearest = null;
+      let minDist = Infinity;
+      for (const pt of points) {
+        const lat = pt.latitude ?? pt.lat;
+        const lon = pt.longitude ?? pt.lon;
+        const dist = (lat - e.latlng.lat) ** 2 + (lon - e.latlng.lng) ** 2;
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = pt;
+        }
+      }
+      if (nearest) onSelectPoint(nearest);
+    }
+  });
+  return null;
+};
+
 const InteractiveHeatMap = ({
   points = [],
   centerLocation = null,
@@ -120,72 +181,39 @@ const InteractiveHeatMap = ({
     setResetTrigger((prev) => prev + 1);
   };
 
-  // Color calculation helper according to active layer
-  const getZoneColor = (pt) => {
+  // Normalizes each point to a 0-1 intensity for the active layer, driving
+  // the heat gradient's color at that spot (0 = coolest end of HEAT_GRADIENT,
+  // 1 = hottest end).
+  const getIntensity = useCallback((pt) => {
     if (activeLayer === 'surface_temp') {
-      const sTemp = pt.surfaceTemp || (pt.temperature ? pt.temperature + 4.5 : 36);
-      if (sTemp >= 40) return '#C94C4C'; // Extreme
-      if (sTemp >= 36) return '#D96C2F'; // High
-      if (sTemp >= 32) return '#E69A2D'; // Moderate
-      return '#5F8F6B'; // Cool
+      const sTemp = pt.surfaceTemp ?? (pt.temperature ? pt.temperature + 4.5 : 36);
+      return Math.min(Math.max((sTemp - 28) / (42 - 28), 0), 1);
     }
 
     if (activeLayer === 'vegetation') {
-      const veg = pt.vegetation_index !== undefined ? pt.vegetation_index : 0.35;
-      if (veg >= 0.60) return '#5F8F6B'; // High Canopy (Green)
-      if (veg >= 0.30) return '#E69A2D'; // Moderate (Amber)
-      return '#C94C4C'; // Sparse (Red)
+      // Sparse canopy reads as "hot" on this layer, so invert vegetation ratio.
+      const veg = pt.vegetation_index ?? 0.35;
+      return Math.min(Math.max(1 - veg, 0), 1);
     }
 
     if (activeLayer === 'built_up') {
-      const density = pt.building_density !== undefined ? pt.building_density : 0.75;
-      if (density >= 0.75) return '#C94C4C'; // Dense concrete
-      if (density >= 0.40) return '#E69A2D'; // Moderate
-      return '#5F8F6B'; // Low density / permeable
+      const density = pt.building_density ?? 0.75;
+      return Math.min(Math.max(density, 0), 1);
     }
 
-    if (activeLayer === 'heat_risk') {
-      const score = pt.heat_risk || pt.heatRiskScore || 50;
-      return getRiskColor(score);
-    }
+    // 'heat_risk' and the default 'heat_intensity' layers both key off the
+    // 0-100 heat risk score.
+    const score = pt.heat_risk ?? pt.heatRiskScore ?? 50;
+    return Math.min(Math.max(score / 100, 0), 1);
+  }, [activeLayer]);
 
-    // Default 'heat_intensity'
-    const intensity = (pt.heat_intensity || pt.heatIntensity || '').toLowerCase();
-    if (intensity === 'severe' || intensity === 'extreme') return '#C94C4C';
-    if (intensity === 'high') return '#D96C2F';
-    if (intensity === 'moderate') return '#E69A2D';
-    if (intensity === 'cool') return '#5F8F6B';
-
-    const fallbackScore = pt.heat_risk || pt.heatRiskScore || 50;
-    return getRiskColor(fallbackScore);
-  };
-
-  // Radius helper for thermal bloom
-  const getZoneRadiusMeters = (pt) => {
-    const risk = pt.heat_risk || pt.heatRiskScore || 50;
-    if (activeLayer === 'surface_temp') {
-      const sTemp = pt.surfaceTemp || 36;
-      return Math.max(sTemp * 16, 450);
-    }
-    return Math.max(risk * 10, 450);
-  };
-
-  // Tile URL depending on theme
-  const tileUrl = theme === 'dark'
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
-  const tileAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
-
-  const isSelected = (pt) => {
-    if (!selectedLocation && !centerLocation) return false;
-    const target = selectedLocation || centerLocation;
-    const lat = pt.latitude || pt.lat;
-    const lon = pt.longitude || pt.lon;
-    const tLat = target.lat || target.latitude;
-    const tLon = target.lon || target.longitude;
-    return Math.abs(lat - tLat) < 0.0001 && Math.abs(lon - tLon) < 0.0001;
-  };
+  // CartoDB's basemap tiles now require an API key (they render an
+  // "API KEY REQUIRED" watermark without one), so use the same free,
+  // no-key OpenStreetMap tile source as MapView.jsx. There's no separate
+  // dark variant of these tiles, so dark mode is faked with a CSS filter
+  // on the tile layer instead of a paid dark-tile provider.
+  const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const tileAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
   return (
     <div className="interactive-heatmap-wrapper">
@@ -199,7 +227,7 @@ const InteractiveHeatMap = ({
         maxBoundsViscosity={1.0}
       >
         <TileLayer
-          key={theme} // re-mount tile layer cleanly when theme changes
+          className={theme === 'dark' ? 'map-tile-dark-filter' : ''}
           url={tileUrl}
           attribution={tileAttribution}
           maxZoom={19}
@@ -222,122 +250,9 @@ const InteractiveHeatMap = ({
           resetTrigger={resetTrigger}
         />
 
-        {/* Spatial Heat Layer: Radial Thermal Zones */}
-        {points.map((pt) => {
-          const color = getZoneColor(pt);
-          const radiusMeters = getZoneRadiusMeters(pt);
-          const selected = isSelected(pt);
-
-          const temp = pt.temperature ?? 34;
-          const feelsLike = pt.feelsLike ?? (temp + 5);
-          const heatIntensity = pt.heatIntensity || pt.heat_intensity || 'Moderate';
-          const riskLevel = pt.riskLevel || pt.risk_level || 'Moderate';
-          const vegLevel = pt.vegetation || (pt.vegetation_index > 0.6 ? 'High' : pt.vegetation_index > 0.3 ? 'Moderate' : 'Low');
-          const densityLevel = pt.builtUpDensityLevel || (pt.building_density > 0.7 ? 'High' : pt.building_density > 0.4 ? 'Moderate' : 'Low');
-          const lastUpdated = pt.lastUpdated || 'Today, 01:30 PM';
-
-          return (
-            <React.Fragment key={`zone-group-${pt.id}`}>
-              {/* Outer Translucent Thermal Plume */}
-              <Circle
-                center={[pt.latitude, pt.longitude]}
-                radius={radiusMeters}
-                pathOptions={{
-                  fillColor: color,
-                  fillOpacity: selected ? 0.35 : 0.22,
-                  color: color,
-                  weight: selected ? 2 : 1,
-                  opacity: selected ? 0.8 : 0.4,
-                  dashArray: selected ? null : '4, 4'
-                }}
-                eventHandlers={{
-                  click: () => {
-                    if (onSelectPoint) onSelectPoint(pt);
-                  }
-                }}
-              />
-
-              {/* Inner Core Marker */}
-              <CircleMarker
-                center={[pt.latitude, pt.longitude]}
-                radius={selected ? 11 : 8}
-                pathOptions={{
-                  fillColor: color,
-                  fillOpacity: 0.95,
-                  color: selected ? '#FFFFFF' : color,
-                  weight: selected ? 3 : 2,
-                  opacity: 1
-                }}
-                eventHandlers={{
-                  click: () => {
-                    if (onSelectPoint) onSelectPoint(pt);
-                  }
-                }}
-              >
-                <Popup className="urbanheat-custom-popup">
-                  <div className="map-popup-card">
-                    <div className="popup-header-row">
-                      <h4 className="popup-title">{pt.name}</h4>
-                      <span className="popup-zone-type">{pt.zoneType || 'Urban Area'}</span>
-                    </div>
-
-                    <div className="popup-badge-row">
-                      <span
-                        className="popup-risk-badge"
-                        style={{
-                          backgroundColor: `${color}20`,
-                          color: color,
-                          borderColor: color
-                        }}
-                      >
-                        {riskLevel} Risk • {heatIntensity} Intensity
-                      </span>
-                    </div>
-
-                    <div className="popup-stats-grid">
-                      <div className="popup-stat-item">
-                        <span className="stat-name">Temperature:</span>
-                        <strong className="stat-val">{temp}°C</strong>
-                      </div>
-                      <div className="popup-stat-item">
-                        <span className="stat-name">Feels Like:</span>
-                        <strong className="stat-val">{feelsLike}°C</strong>
-                      </div>
-                      <div className="popup-stat-item">
-                        <span className="stat-name">Heat Intensity:</span>
-                        <strong className="stat-val">{heatIntensity}</strong>
-                      </div>
-                      <div className="popup-stat-item">
-                        <span className="stat-name">Risk Level:</span>
-                        <strong className="stat-val">{riskLevel}</strong>
-                      </div>
-                      <div className="popup-stat-item">
-                        <span className="stat-name">Vegetation:</span>
-                        <strong className="stat-val">{vegLevel} ({Math.round((pt.vegetation_index || 0.35) * 100)}%)</strong>
-                      </div>
-                      <div className="popup-stat-item">
-                        <span className="stat-name">Built-up Density:</span>
-                        <strong className="stat-val">{densityLevel} ({Math.round((pt.building_density || 0.75) * 100)}%)</strong>
-                      </div>
-                    </div>
-
-                    <div className="popup-footer-row">
-                      <span className="popup-updated-label">Last Updated: {lastUpdated}</span>
-                      <button
-                        className="popup-select-btn"
-                        onClick={() => {
-                          if (onSelectPoint) onSelectPoint(pt);
-                        }}
-                      >
-                        Select Area
-                      </button>
-                    </div>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            </React.Fragment>
-          );
-        })}
+        {/* Smooth Spatial Heat Gradient (weather-radar style, no discrete points) */}
+        <HeatGradientLayer points={points} getIntensity={getIntensity} />
+        <HeatClickHandler points={points} onSelectPoint={onSelectPoint} />
 
         {/* Prominent Highlighting Ring for Selected Location */}
         {(selectedLocation || centerLocation) && (

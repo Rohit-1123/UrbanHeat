@@ -53,3 +53,17 @@ export const getLocationHeatDetail = async (lat, lon, location_name = 'City Cent
   });
   return response.data;
 };
+
+export const getHeatTrend = async (lat, lon, location_name = 'Selected Area') => {
+  const response = await apiClient.get('/api/heat-trend', {
+    params: { lat: parseFloat(lat), lon: parseFloat(lon), location_name },
+  });
+  return response.data;
+};
+
+export const getRecommendations = async (lat, lon, location_name = 'Selected Area') => {
+  const response = await apiClient.get('/api/recommendations', {
+    params: { lat: parseFloat(lat), lon: parseFloat(lon), location_name },
+  });
+  return response.data;
+};
