@@ -192,6 +192,8 @@ body {
   border-bottom: 1px solid var(--border);
   z-index: 1000;
   transition: background-color 0.25s ease, border-color 0.25s ease;
+  /* Keep the header clear of the iOS status bar / notch when installed as a PWA */
+  padding-top: env(safe-area-inset-top);
 }
 
 .navbar-content {
@@ -253,10 +255,55 @@ body {
   letter-spacing: 0.08em;
 }
 
+/* Narrow phones (320-400px): the brand badge + full theme-toggle label
+   don't fit the header alongside the status dot — drop the lowest-value
+   elements first so nothing gets visually clipped. */
+@media (max-width: 400px) {
+  .brand-sub-badge {
+    display: none;
+  }
+
+  .theme-toggle-text {
+    display: none;
+  }
+
+  .theme-toggle-btn {
+    padding: 8px;
+    min-width: 40px;
+    justify-content: center;
+  }
+}
+
 .desktop-nav-menu {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Tablet-landscape / small-laptop tier: 6 nav items + status badge + theme
+   toggle no longer fit at full size between 769-1180px — tighten before
+   the layout switches to the mobile bottom nav at 768px. */
+@media (max-width: 1180px) {
+  .desktop-nav-menu {
+    gap: 0;
+  }
+
+  .nav-link-btn {
+    padding: 8px 8px;
+    font-size: 0.78rem;
+  }
+
+  .nav-link-btn span {
+    display: none;
+  }
+
+  .backend-status-label {
+    display: none;
+  }
+
+  .theme-toggle-text {
+    display: none;
+  }
 }
 
 .nav-link-btn {
@@ -357,67 +404,11 @@ body {
   border-color: var(--border-hover);
 }
 
-.mobile-hamburger-btn {
-  display: none;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  cursor: pointer;
-  padding: 8px;
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-}
-
-@media (min-width: 961px) {
-  .mobile-hamburger-btn { display: none; }
-}
-
-@media (max-width: 960px) {
+/* Below 768px, the top nav links are replaced by the fixed MobileBottomNav
+   (see "Mobile Bottom Navigation" block) — no gap between the two, no
+   leftover hamburger/drawer pattern. */
+@media (max-width: 768px) {
   .desktop-nav-menu { display: none; }
-  .mobile-hamburger-btn { display: flex; }
-}
-
-.mobile-nav-drawer {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.mobile-nav-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 0.92rem;
-  font-weight: 600;
-  padding: 12px 14px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  min-height: 44px;
-  transition: all 0.15s ease;
-}
-
-.mobile-nav-link:hover {
-  background: var(--surface-secondary);
-  color: var(--text-primary);
-}
-
-.mobile-nav-link.active {
-  color: var(--primary);
-  background: var(--primary-soft);
-  font-weight: 700;
 }
 
 /* Hero Section */
@@ -432,6 +423,120 @@ body {
 @media (max-width: 640px) {
   .hero-section {
     padding: 24px 8px 12px;
+  }
+}
+
+/* Mobile home summary — hidden on desktop, replaces the hero on phones */
+.mobile-home-summary {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .hero-section {
+    display: none;
+  }
+
+  .mobile-home-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mobile-home-location {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+  }
+
+  .mobile-home-status-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mobile-home-status-loading {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 0.86rem;
+    font-weight: 600;
+    padding: 24px 16px;
+  }
+
+  .mobile-home-status-top {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .mobile-home-metric {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mobile-home-metric-val {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--text-primary);
+  }
+
+  .mobile-home-risk-pill {
+    margin-left: auto;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid;
+    font-size: 0.76rem;
+    font-weight: 800;
+  }
+
+  .mobile-home-action {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .mobile-home-cta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .mobile-home-cta-primary,
+  .mobile-home-cta-secondary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    border-radius: var(--radius-control, 10px);
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .mobile-home-cta-primary {
+    border: none;
+    background: var(--primary);
+    color: var(--primary-contrast);
+  }
+
+  .mobile-home-cta-secondary {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
   }
 }
 
@@ -1077,15 +1182,17 @@ body {
 
 @media (max-width: 768px) {
   .map-frame {
-    height: 390px;
-    min-height: 340px;
+    /* The map is the primary content on this screen on mobile — let it
+       take most of the viewport height instead of a small fixed box. */
+    height: clamp(420px, 65vh, 640px);
+    min-height: 420px;
   }
 }
 
 @media (max-width: 480px) {
   .map-frame {
-    height: 350px;
-    min-height: 310px;
+    height: clamp(380px, 62vh, 560px);
+    min-height: 380px;
   }
 }
 
@@ -2551,6 +2658,70 @@ body {
 
 .about-text-sm { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; }
 
+/* ==========================================================================
+   Mobile Bottom Navigation & Safe Areas
+   ========================================================================== */
+
+/* Reserve space so page content never sits behind the fixed bottom nav. */
+:root {
+  --mobile-bottom-nav-height: 60px;
+}
+
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .app-footer {
+    display: none;
+  }
+
+  .app-main-viewport.has-mobile-nav {
+    padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1100;
+    height: var(--mobile-bottom-nav-height);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 10px rgba(11, 18, 16, 0.06);
+  }
+
+  .mobile-bottom-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 44px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 700;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s ease;
+  }
+
+  .mobile-bottom-nav-btn:active {
+    opacity: 0.7;
+  }
+
+  .mobile-bottom-nav-btn.active {
+    color: var(--primary);
+  }
+}
+
 /* Footer */
 .app-footer {
   background: var(--surface);
@@ -3281,6 +3452,221 @@ body {
 }
 
 /* ==========================================================================
+   Settings Page
+   ========================================================================== */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-section-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+.settings-option-group,
+.settings-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+}
+
+.settings-card {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-option-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settings-option-group .settings-option-row:last-child {
+  border-bottom: none;
+}
+
+.settings-option-row:hover {
+  background: var(--surface-secondary);
+}
+
+.settings-option-row.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.settings-row-static {
+  cursor: default;
+}
+
+.settings-row-static:hover {
+  background: transparent;
+}
+
+.settings-row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.settings-option-row.active .settings-row-icon {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.settings-row-label {
+  flex: 1;
+}
+
+.settings-row-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-row-sub {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.settings-row-check {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.settings-row-chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.settings-toggle-disabled {
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settings-toggle-disabled::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.settings-status-row.ok { color: var(--environment); }
+.settings-status-row.bad { color: var(--danger); }
+.settings-status-row.neutral { color: var(--text-muted); }
+
+.settings-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.settings-hint-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.settings-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: var(--radius-control, 8px);
+  border: none;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.settings-btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.settings-version-label {
+  flex: none;
+}
+
+.settings-api-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+
+.settings-api-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.settings-api-badge.connected { background: var(--environment-soft); color: var(--environment); }
+.settings-api-badge.connected .settings-api-dot { background: var(--environment); }
+.settings-api-badge.disconnected { background: var(--danger-soft); color: var(--danger); }
+.settings-api-badge.disconnected .settings-api-dot { background: var(--danger); }
+.settings-api-badge.checking .settings-api-dot { animation: statusPulse 1.4s ease-in-out infinite; }
+
+/* ==========================================================================
    Print Mode Stylesheet
    ========================================================================== */
 @media print {
@@ -3990,6 +4376,42 @@ body {
   background: var(--primary-hover);
 }
 
+/* Mobile touch-target pass: the route form's inputs/buttons are sized for
+   a mouse by default — bump them to the ~44px minimum on phones. */
+@media (max-width: 768px) {
+  .input-coord {
+    min-height: 46px;
+    font-size: 0.95rem;
+    padding: 10px 12px;
+  }
+
+  .btn-use-gps {
+    min-height: 44px;
+    padding: 0 8px;
+    font-size: 0.78rem;
+  }
+
+  .btn-tap-mode {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 0.76rem;
+  }
+
+  .preset-pill-btn {
+    min-height: 44px;
+    font-size: 0.82rem;
+  }
+
+  .btn-calculate-routes {
+    min-height: 50px;
+    font-size: 0.92rem;
+  }
+
+  .btn-swap-coords {
+    min-height: 40px;
+  }
+}
+
 .routes-comparison-stack {
   display: flex;
   flex-direction: column;
@@ -4088,10 +4510,24 @@ body {
   flex-wrap: wrap;
 }
 
+.route-why-this {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.route-why-this strong {
+  color: var(--text-primary);
+}
+
 .btn-open-navigation {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 48px;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-primary);
@@ -4102,6 +4538,21 @@ body {
   border-radius: var(--radius-control);
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+@media (max-width: 768px) {
+  .btn-open-navigation {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-contrast);
+    justify-content: center;
+    font-size: 0.9rem;
+  }
+
+  .btn-open-navigation:hover {
+    background: var(--primary-hover);
+    color: var(--primary-contrast);
+  }
 }
 
 .btn-open-navigation:hover {
@@ -4198,6 +4649,16 @@ body {
   min-height: 480px;
   z-index: 0;
   cursor: crosshair;
+}
+
+@media (max-width: 768px) {
+  .desktop-map-center-container {
+    height: clamp(340px, 52vh, 460px);
+  }
+
+  .leaflet-map-wrapper {
+    min-height: 340px;
+  }
 }
 
 .thermal-profile-card {

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import MobileBottomNav from './components/MobileBottomNav';
 
 import HomePage from './pages/HomePage';
 import HeatMapPage from './pages/HeatMapPage';
 import RoutesPage from './pages/RoutesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import InsightsPage from './pages/InsightsPage';
+import SettingsPage from './pages/SettingsPage';
 import HeatAlertBanner from './components/HeatAlertBanner';
 
 import { fetchHeatPoints, fetchCurrentHeatData, checkBackendStatus } from './services/heatService';
@@ -15,10 +17,23 @@ import { estimateMicroclimateForCoords } from './utils/riskCalculator';
 import './App.css';
 import { isWithinSrmCampus } from './config/campus';
 
+const getSystemPrefersDark = () => (
+  typeof window !== 'undefined'
+  && window.matchMedia
+  && window.matchMedia('(prefers-color-scheme: dark)').matches
+);
+
 const App = () => {
   const [activePage, setActivePage] = useState('home');
+  // 'light' | 'dark' | 'system' — the user's stored preference.
+  const [themePreference, setThemePreference] = useState(() => (
+    localStorage.getItem('urbanheat-theme') || 'light'
+  ));
+  // The actually-applied theme ('light' | 'dark'), resolved from the
+  // preference above (and, when 'system', from the OS setting).
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('urbanheat-theme') || 'light';
+    const pref = localStorage.getItem('urbanheat-theme') || 'light';
+    return pref === 'system' ? (getSystemPrefersDark() ? 'dark' : 'light') : pref;
   });
 
   const [currentLocation, setCurrentLocation] = useState(null);
@@ -52,11 +67,29 @@ const App = () => {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('urbanheat-theme', theme);
   }, [theme]);
 
+  // Resolve themePreference -> theme, and keep it live if the user is on
+  // 'system' and the OS-level color scheme changes while the app is open.
+  useEffect(() => {
+    localStorage.setItem('urbanheat-theme', themePreference);
+
+    if (themePreference !== 'system') {
+      setTheme(themePreference);
+      return undefined;
+    }
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    setTheme(media.matches ? 'dark' : 'light');
+    const handleChange = (e) => setTheme(e.matches ? 'dark' : 'light');
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, [themePreference]);
+
+  // Quick toggle used by the navbar/theme button: flips between explicit
+  // light/dark based on whatever is currently applied.
   const handleToggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setThemePreference(theme === 'light' ? 'dark' : 'light');
   };
 
   const handleSelectLocation = async (location) => {
@@ -136,9 +169,16 @@ const App = () => {
         };
         setCurrentLocation(customLoc);
       },
-      (err) => setLocationError(err.code === 1
-        ? 'Location permission was denied. Allow location access in browser settings, or use an SRM campus map pin.'
-        : `Unable to retrieve your location: ${err.message}`)
+      (err) => {
+        if (err.code === 1) {
+          setLocationError('Location access is unavailable. You can search for a location manually instead.');
+        } else if (err.code === 3) {
+          setLocationError('Getting your location took too long. You can search for a location manually instead.');
+        } else {
+          setLocationError('Your location could not be determined. You can search for a location manually instead.');
+        }
+      },
+      { timeout: 10000, maximumAge: 60000 }
     );
   };
 
@@ -167,7 +207,7 @@ const App = () => {
       )}
 
       {/* Main Page View Content */}
-      <main className="app-main-viewport">
+      <main className="app-main-viewport has-mobile-nav">
         {activePage === 'home' && (
           <HomePage
             currentLocation={currentLocation}
@@ -217,10 +257,24 @@ const App = () => {
         {activePage === 'about' && (
           <InsightsPage currentLocation={currentLocation} initialTab="about" />
         )}
+
+        {activePage === 'settings' && (
+          <SettingsPage
+            themePreference={themePreference}
+            onSetThemePreference={setThemePreference}
+            backendStatus={backendStatus}
+            onNavigate={setActivePage}
+            onUseMyLocation={handleUseMyLocation}
+            locationError={locationError}
+          />
+        )}
       </main>
 
-      {/* Footer */}
+      {/* Footer (hidden on mobile — replaced by the bottom nav) */}
       <Footer onNavigate={setActivePage} />
+
+      {/* Fixed mobile bottom navigation (hidden on desktop widths) */}
+      <MobileBottomNav activePage={activePage} onNavigate={setActivePage} />
     </div>
   );
 };

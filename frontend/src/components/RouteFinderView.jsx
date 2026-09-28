@@ -413,6 +413,11 @@ const RouteFinderView = ({
                   <span className="text-emerald"><Sun size={13} /> <strong>{happiest.average_heat_risk}/100 Risk</strong></span>
                   <span className="text-emerald"><Leaf size={13} /> {happiest.shaded_area_percentage}% Shade</span>
                 </div>
+                {routesData?.comparison?.summary && (
+                  <p className="route-why-this">
+                    <strong>Why this route?</strong> {routesData.comparison.summary}
+                  </p>
+                )}
               </div>
 
             </div>

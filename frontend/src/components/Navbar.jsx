@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Leaf, Menu, X, Home, Map, Navigation, BarChart3, BookOpen } from 'lucide-react';
+import React from 'react';
+import { Leaf, Home, Map, Navigation, BarChart3, BookOpen, Settings } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
 const BACKEND_STATUS_META = {
@@ -9,20 +9,20 @@ const BACKEND_STATUS_META = {
 };
 
 const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 'checking' }) => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  // Minimal, focused top-level topics
+  // Minimal, focused top-level topics. On mobile widths this bar collapses
+  // to a compact header — MobileBottomNav (App.jsx) handles navigation
+  // there instead.
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'map', label: 'Heat Map', icon: Map },
     { id: 'routes', label: 'Cool Routes', icon: Navigation },
     { id: 'analytics', label: 'Analytics & Risk', icon: BarChart3 },
     { id: 'insights', label: 'Insights & Guide', icon: BookOpen },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const handleNavClick = (id) => {
     onNavigate(id);
-    setMobileMenuOpen(false);
   };
 
   // Helper to determine if a grouped route is active
@@ -57,6 +57,9 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 
                 key={item.id}
                 className={`nav-link-btn ${active ? 'active' : ''}`}
                 onClick={() => handleNavClick(item.id)}
+                aria-label={item.label}
+                aria-current={active ? 'page' : undefined}
+                title={item.label}
               >
                 <Icon size={16} />
                 <span>{item.label}</span>
@@ -65,7 +68,7 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 
           })}
         </nav>
 
-        {/* Right Controls: Backend Status, Theme Toggle & Mobile Hamburger */}
+        {/* Right Controls: Backend Status & Theme Toggle (mobile uses the bottom nav for navigation instead of a hamburger) */}
         <div className="navbar-actions">
           <span
             className={`backend-status-badge ${BACKEND_STATUS_META[backendStatus].className}`}
@@ -76,36 +79,8 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 
           </span>
 
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-
-          <button
-            className="mobile-hamburger-btn"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle Menu"
-          >
-            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
         </div>
       </div>
-
-      {/* Mobile Drawer Menu */}
-      {mobileMenuOpen && (
-        <div className="mobile-nav-drawer">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = isNavActive(item.id);
-            return (
-              <button
-                key={item.id}
-                className={`mobile-nav-link ${active ? 'active' : ''}`}
-                onClick={() => handleNavClick(item.id)}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
     </header>
   );
 };

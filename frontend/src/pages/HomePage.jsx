@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import LocationSearch from '../components/LocationSearch';
 import HeatOverviewCard from '../components/HeatOverviewCard';
-import { MapPin, Database, Cpu, ShieldAlert, Lightbulb, ArrowRight, Sparkles, Map, Loader2 } from 'lucide-react';
+import { MapPin, Database, Cpu, ShieldAlert, Lightbulb, ArrowRight, Sparkles, Map, Loader2, Navigation, Droplets, Thermometer } from 'lucide-react';
 import { fetchLiveWeather } from '../services/weatherService';
+import { getRiskColor } from '../utils/riskCalculator';
 
 const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNavigate }) => {
   const [syncingWeather, setSyncingWeather] = useState(false);
@@ -74,9 +75,69 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
     }
   ];
 
+  // Real fields only — mirrors the field-fallback pattern already used by
+  // HeatOverviewCard/HeatAlertBanner. No fabricated defaults: undefined
+  // fields render as "—" rather than a made-up number.
+  const temperature = currentLocation?.temperature;
+  const heatRiskScore = currentLocation?.heatRiskScore ?? currentLocation?.heat_risk;
+  const riskLevel = currentLocation?.riskLevel ?? currentLocation?.risk_level;
+  const humidity = currentLocation?.humidity;
+  const riskColor = getRiskColor(heatRiskScore ?? 0);
+
   return (
     <div className="page-container home-page">
-      {/* Hero Section */}
+      {/* Mobile-only compact status summary — shown instead of the desktop
+          hero at phone widths (see .mobile-home-summary in App.css). Reads
+          the same currentLocation prop, no separate data fetch. */}
+      <section className="mobile-home-summary">
+        <div className="mobile-home-location">
+          <MapPin size={15} className="text-emerald" />
+          <span>{currentLocation?.area || 'SRM Kattankulathur Campus'}</span>
+        </div>
+
+        {!currentLocation ? (
+          <div className="mobile-home-status-card mobile-home-status-loading">
+            <Loader2 size={20} className="animate-spin text-emerald" />
+            <span>Loading live environmental data...</span>
+          </div>
+        ) : (
+          <div className="mobile-home-status-card">
+            <div className="mobile-home-status-top">
+              <div className="mobile-home-metric">
+                <Thermometer size={18} className="text-red" />
+                <span className="mobile-home-metric-val">{Number.isFinite(temperature) ? `${temperature}°C` : '—'}</span>
+              </div>
+              <div className="mobile-home-metric">
+                <Droplets size={18} className="text-blue" />
+                <span className="mobile-home-metric-val">{Number.isFinite(humidity) ? `${humidity}%` : '—'}</span>
+              </div>
+              <span
+                className="mobile-home-risk-pill"
+                style={{ backgroundColor: `${riskColor}20`, color: riskColor, borderColor: `${riskColor}40` }}
+              >
+                {riskLevel || 'Unknown'} Risk
+              </span>
+            </div>
+
+            {currentLocation?.recommendedAction && (
+              <p className="mobile-home-action">{currentLocation.recommendedAction}</p>
+            )}
+          </div>
+        )}
+
+        <div className="mobile-home-cta-row">
+          <button className="mobile-home-cta-primary" onClick={() => onNavigate('routes')}>
+            <Navigation size={17} />
+            <span>Find a Cooler Route</span>
+          </button>
+          <button className="mobile-home-cta-secondary" onClick={() => onNavigate('map')}>
+            <Map size={17} />
+            <span>Open Heat Map</span>
+          </button>
+        </div>
+      </section>
+
+      {/* Hero Section (desktop) */}
       <section className="hero-section">
         <div className="hero-content">
           <div className="hero-badge">
