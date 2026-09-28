@@ -1,6 +1,7 @@
 import React from 'react';
 import { Leaf, Home, Map, Navigation, BarChart3, BookOpen, Settings } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
+import InstallAppButton from './InstallAppButton';
 
 const BACKEND_STATUS_META = {
   checking: { label: 'Connecting…', className: 'checking' },
@@ -9,16 +10,15 @@ const BACKEND_STATUS_META = {
 };
 
 const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 'checking' }) => {
-  // Minimal, focused top-level topics. On mobile widths this bar collapses
-  // to a compact header — MobileBottomNav (App.jsx) handles navigation
-  // there instead.
+  // Primary topics. Settings intentionally lives only in the header's gear
+  // icon (navbar-actions below), not here and not in the mobile bottom nav —
+  // it's secondary, not a top-level destination.
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'map', label: 'Heat Map', icon: Map },
     { id: 'routes', label: 'Cool Routes', icon: Navigation },
     { id: 'analytics', label: 'Analytics & Risk', icon: BarChart3 },
     { id: 'insights', label: 'Insights & Guide', icon: BookOpen },
-    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const handleNavClick = (id) => {
@@ -68,8 +68,12 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 
           })}
         </nav>
 
-        {/* Right Controls: Backend Status & Theme Toggle (mobile uses the bottom nav for navigation instead of a hamburger) */}
+        {/* Right Controls: Install, Backend Status, Settings & Theme Toggle
+            (mobile uses the bottom nav for Home/Map/Routes/Insights;
+            Settings and Install live here in the header on every width). */}
         <div className="navbar-actions">
+          <InstallAppButton variant="header" />
+
           <span
             className={`backend-status-badge ${BACKEND_STATUS_META[backendStatus].className}`}
             title={BACKEND_STATUS_META[backendStatus].label}
@@ -77,6 +81,17 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 
             <span className="backend-status-dot" />
             <span className="backend-status-label">{BACKEND_STATUS_META[backendStatus].label}</span>
           </span>
+
+          <button
+            type="button"
+            className={`navbar-settings-btn ${activePage === 'settings' ? 'active' : ''}`}
+            onClick={() => handleNavClick('settings')}
+            aria-label="Settings"
+            aria-current={activePage === 'settings' ? 'page' : undefined}
+            title="Settings"
+          >
+            <Settings size={18} />
+          </button>
 
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>

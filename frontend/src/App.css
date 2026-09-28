@@ -161,6 +161,100 @@ body {
   font: inherit;
 }
 
+.offline-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--text-primary);
+  color: var(--background);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.pwa-update-toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + var(--mobile-bottom-nav-height, 0px) + env(safe-area-inset-bottom, 0px));
+  z-index: 1200;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+@media (min-width: 769px) {
+  .pwa-update-toast {
+    bottom: 16px;
+  }
+}
+
+.pwa-update-toast span {
+  flex: 1;
+}
+
+.pwa-update-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pwa-update-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.page-lazy-fallback {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 50vh;
+  color: var(--text-muted);
+}
+
+.page-lazy-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .page-container {
   width: 100%;
   max-width: 1200px;
@@ -402,6 +496,153 @@ body {
 
 .theme-toggle-btn:hover {
   border-color: var(--border-hover);
+}
+
+/* Settings entry point — a single gear icon in the header, present at every
+   screen width. Settings is deliberately not in the mobile bottom nav or
+   the desktop top-nav link list. */
+.navbar-settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 44px;
+  min-height: 44px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.navbar-settings-btn:hover,
+.navbar-settings-btn.active {
+  background: var(--surface-secondary);
+  color: var(--primary);
+}
+
+/* ==========================================================================
+   Install UrbanHeat (PWA)
+   ========================================================================== */
+.install-app-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-control, 8px);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.install-app-btn:hover {
+  background: var(--primary-hover);
+}
+
+/* Header variant: compact icon+label chip next to the theme toggle. Hidden
+   on mobile — the Home screen's own install banner covers phones instead,
+   so the user isn't shown two install prompts at once. */
+.install-app-wrap.header {
+  display: flex;
+}
+
+.install-app-wrap.header .install-app-btn {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.76rem;
+  background: var(--surface-secondary);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.install-app-wrap.header .install-app-btn:hover {
+  background: var(--primary-soft);
+}
+
+@media (max-width: 768px) {
+  .install-app-wrap.header {
+    display: none;
+  }
+}
+
+/* Banner variant: used on the mobile Home screen. */
+.install-app-wrap.banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-panel);
+  padding: 14px;
+}
+
+.install-app-wrap.banner .install-app-btn {
+  width: 100%;
+}
+
+.install-app-dismiss {
+  align-self: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 6px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.install-app-dismiss:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.install-ios-hint {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.install-ios-hint p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  line-height: 1.6;
+}
+
+.install-ios-hint strong {
+  color: var(--text-primary);
+}
+
+.install-ios-hint button {
+  align-self: flex-end;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  min-height: 36px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 /* Below 768px, the top nav links are replaced by the fixed MobileBottomNav

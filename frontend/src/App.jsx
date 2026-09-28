@@ -1,14 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import MobileBottomNav from './components/MobileBottomNav';
+import OfflineBanner from './components/OfflineBanner';
+import PwaUpdateToast from './components/PwaUpdateToast';
 
+// The Home screen is the first thing every user sees, so it stays in the
+// main bundle. Everything else is only fetched when actually navigated to.
 import HomePage from './pages/HomePage';
-import HeatMapPage from './pages/HeatMapPage';
-import RoutesPage from './pages/RoutesPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import InsightsPage from './pages/InsightsPage';
-import SettingsPage from './pages/SettingsPage';
+const HeatMapPage = lazy(() => import('./pages/HeatMapPage'));
+const RoutesPage = lazy(() => import('./pages/RoutesPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const InsightsPage = lazy(() => import('./pages/InsightsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+
 import HeatAlertBanner from './components/HeatAlertBanner';
 
 import { fetchHeatPoints, fetchCurrentHeatData, checkBackendStatus } from './services/heatService';
@@ -16,6 +21,13 @@ import { getLocationHeatDetail } from './services/api';
 import { estimateMicroclimateForCoords } from './utils/riskCalculator';
 import './App.css';
 import { isWithinSrmCampus } from './config/campus';
+
+const PageLoadingFallback = () => (
+  <div className="page-lazy-fallback" role="status">
+    <div className="page-lazy-spinner" />
+    <span>Loading…</span>
+  </div>
+);
 
 const getSystemPrefersDark = () => (
   typeof window !== 'undefined'
@@ -206,6 +218,9 @@ const App = () => {
         </div>
       )}
 
+      {/* Real, non-hardcoded connectivity state — never assume "online". */}
+      <OfflineBanner />
+
       {/* Main Page View Content */}
       <main className="app-main-viewport has-mobile-nav">
         {activePage === 'home' && (
@@ -217,6 +232,7 @@ const App = () => {
           />
         )}
 
+        <Suspense fallback={activePage !== 'home' ? <PageLoadingFallback /> : null}>
         {activePage === 'map' && (
           <HeatMapPage
             currentLocation={currentLocation}
@@ -268,7 +284,12 @@ const App = () => {
             locationError={locationError}
           />
         )}
+        </Suspense>
       </main>
+
+      {/* Prompts to refresh when a new deployed version's service worker is
+          ready — never swaps the app out from under the user silently. */}
+      <PwaUpdateToast />
 
       {/* Footer (hidden on mobile — replaced by the bottom nav) */}
       <Footer onNavigate={setActivePage} />

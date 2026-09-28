@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LocationSearch from '../components/LocationSearch';
 import HeatOverviewCard from '../components/HeatOverviewCard';
+import InstallAppButton from '../components/InstallAppButton';
 import { MapPin, Database, Cpu, ShieldAlert, Lightbulb, ArrowRight, Sparkles, Map, Loader2, Navigation, Droplets, Thermometer } from 'lucide-react';
 import { fetchLiveWeather } from '../services/weatherService';
 import { getRiskColor } from '../utils/riskCalculator';
@@ -135,6 +136,8 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
             <span>Open Heat Map</span>
           </button>
         </div>
+
+        <InstallAppButton variant="banner" />
       </section>
 
       {/* Hero Section (desktop) */}
