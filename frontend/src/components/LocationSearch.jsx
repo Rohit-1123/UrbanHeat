@@ -3,8 +3,11 @@ import { Search, MapPin, Target, ChevronRight } from 'lucide-react';
 import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 import { searchCampusLocations } from '../services/api';
 
+const POPULAR = ['Tech Park', 'SRM Central Library', 'Main Block', 'Sports Complex', 'Dr. T.P. Ganesan Auditorium', 'Biotechnology Block'];
+
 const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) => {
   const [query, setQuery] = useState('');
+  const [showAllPlaces, setShowAllPlaces] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [remoteResults, setRemoteResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -93,8 +96,7 @@ const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) 
 
       {/* Preset Chips */}
       <div className="location-preset-chips">
-        <span className="chips-label">Popular Zones:</span>
-        {campusLocations.map((loc) => (
+        {(showAllPlaces ? campusLocations : campusLocations.filter((loc) => POPULAR.includes(loc.area))).map((loc) => (
           <button
             key={loc.id}
             className={`preset-chip ${currentLocation?.id === loc.id ? 'active' : ''}`}
@@ -104,6 +106,9 @@ const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) 
             <span>{loc.area}</span>
           </button>
         ))}
+        <button type="button" className="preset-chip preset-chip-more" onClick={() => setShowAllPlaces((v) => !v)} aria-expanded={showAllPlaces}>
+          <span>{showAllPlaces ? 'Fewer places' : `All ${campusLocations.length} places`}</span>
+        </button>
       </div>
 
       {/* Autocomplete Dropdown List */}

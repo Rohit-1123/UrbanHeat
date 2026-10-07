@@ -81,20 +81,12 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
   const riskLevelLabel = liveRisk?.risk_level?.replace(' Heat Risk', '');
   const riskColor = getRiskColor(riskScore ?? 0);
 
-  const riskTimeline = liveRisk
-    ? liveRisk.forecast.map((f) => ({
-        time: f.time,
-        risk: f.risk_level,
-        score: f.heat_risk,
-        color: getRiskColor(f.heat_risk)
-      }))
-    : [
-        { time: '09:00 AM', risk: 'Moderate', score: 45, color: '#eab308' },
-        { time: '12:00 PM', risk: 'High', score: 78, color: '#f97316' },
-        { time: '03:00 PM', risk: 'Severe', score: 88, color: '#ef4444' },
-        { time: '06:00 PM', risk: 'High', score: 65, color: '#f97316' },
-        { time: '09:00 PM', risk: 'Moderate', score: 35, color: '#eab308' }
-      ];
+  const riskTimeline = (liveRisk?.forecast || []).map((f) => ({
+    time: f.time,
+    risk: f.risk_level,
+    score: f.heat_risk,
+    color: getRiskColor(f.heat_risk)
+  }));
 
   const insights = [
     {
@@ -320,6 +312,9 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
               <h3>Daytime Risk Progression Timeline</h3>
             </div>
             <div className="risk-timeline-list">
+              {riskTimeline.length === 0 && (
+                <p className="subtext">{riskLoading ? 'Loading…' : 'Live risk timeline is unavailable right now.'}</p>
+              )}
               {riskTimeline.map((item, idx) => (
                 <div key={idx} className="timeline-row">
                   <span className="time-lbl">{item.time}</span>

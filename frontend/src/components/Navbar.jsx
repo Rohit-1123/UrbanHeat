@@ -17,8 +17,8 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 
     { id: 'home', label: 'Home', icon: Home },
     { id: 'map', label: 'Heat Map', icon: Map },
     { id: 'routes', label: 'Cool Routes', icon: Navigation },
-    { id: 'analytics', label: 'Analytics & Risk', icon: BarChart3 },
-    { id: 'insights', label: 'Insights & Guide', icon: BookOpen },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'insights', label: 'Actions & Guide', icon: BookOpen },
   ];
 
   const handleNavClick = (id) => {
@@ -29,7 +29,7 @@ const Navbar = ({ activePage, onNavigate, theme, onToggleTheme, backendStatus = 
   const isNavActive = (id) => {
     if (activePage === id) return true;
     if (id === 'analytics' && (activePage === 'risk' || activePage === 'simulator')) return true;
-    if (id === 'insights' && (activePage === 'recommendations' || activePage === 'learn' || activePage === 'about')) return true;
+    if (id === 'insights' && ['recommendations', 'guide', 'learn', 'about'].includes(activePage)) return true;
     return false;
   };
 

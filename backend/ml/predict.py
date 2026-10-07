@@ -40,31 +40,41 @@ def predict_heat_risk(
     Predicts Heat Risk Score (0 - 100) and returns (predicted_heat_risk, risk_level).
     Uses joblib model if available, otherwise falls back to exact analytical formula.
     """
-    model = get_loaded_model()
-    features = pd.DataFrame([{
+    return predict_heat_risk_many([{
         "temperature": temperature,
         "humidity": humidity,
         "uv_index": uv_index,
         "vegetation_index": vegetation_index,
         "building_density": building_density,
         "shade_score": shade_score,
-    }])
+    }])[0]
+
+
+FEATURES = ["temperature", "humidity", "uv_index", "vegetation_index", "building_density", "shade_score"]
+
+
+def predict_heat_risk_many(rows: list[dict]) -> list[tuple[float, str]]:
+    """Vectorized prediction for many feature rows in one model call."""
+    features = pd.DataFrame(rows, columns=FEATURES)
+    model = get_loaded_model()
 
     if model is not None:
         try:
-            pred = float(model.predict(features)[0])
-            score = float(np.clip(pred, 0.0, 100.0))
-            return score, classify_risk_level(score)
+            scores = np.clip(model.predict(features), 0.0, 100.0)
+            return [(float(s), classify_risk_level(float(s))) for s in scores]
         except Exception as e:
-            print(f"⚠️ Prediction inference error: {e}. Falling back to analytical formula.")
+            print(f"Prediction inference error: {e}. Falling back to analytical formula.")
 
     # Analytical fallback formula
-    temp_factor = np.clip((temperature - 25.0) / 20.0, 0, 1) * 35.0
-    hum_factor = np.clip((humidity - 30.0) / 60.0, 0, 1) * 15.0
-    uv_factor = np.clip(uv_index / 12.0, 0, 1) * 20.0
-    bld_factor = np.clip(building_density, 0, 1) * 30.0
-    veg_factor = np.clip(vegetation_index, 0, 1) * 25.0
-    shade_factor = np.clip(shade_score, 0, 1) * 25.0
-
-    score = float(np.clip(20.0 + temp_factor + hum_factor + uv_factor + bld_factor - veg_factor - shade_factor, 0.0, 100.0))
-    return score, classify_risk_level(score)
+    f = features
+    scores = np.clip(
+        20.0
+        + np.clip((f.temperature - 25.0) / 20.0, 0, 1) * 35.0
+        + np.clip((f.humidity - 30.0) / 60.0, 0, 1) * 15.0
+        + np.clip(f.uv_index / 12.0, 0, 1) * 20.0
+        + np.clip(f.building_density, 0, 1) * 30.0
+        - np.clip(f.vegetation_index, 0, 1) * 25.0
+        - np.clip(f.shade_score, 0, 1) * 25.0,
+        0.0, 100.0,
+    )
+    return [(float(s), classify_risk_level(float(s))) for s in scores]

@@ -1,149 +1,136 @@
+"""Heat-aware walking routes over the SRM campus path network.
+
+The network (data/campus_paths.json, from OpenStreetMap via
+scripts/build_campus_graph.py) is routed in-process with Dijkstra, so routes
+never leave campus and need no external routing service. Each edge costs
+    length * (1 + alpha * heat_risk / 100)
+with alpha = 0 (fastest), 1.5 (balanced) and 4 (coolest). When the map only
+has one sensible path, the three options honestly come back identical.
+"""
+import heapq
+import json
 import math
-import requests
-import numpy as np
-import time
+import os
 import threading
-from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 from sqlalchemy.orm import Session
+
+from app.database.models import HeatData
 from app.services.heat_service import heat_service, haversine_distance
-from app.services.campus_config import route_geometry_is_within_srm_campus
 
-OSRM_BASE_URL = "https://routing.openstreetmap.de/routed-foot/route/v1/driving"
-
-# Every request hits the public OSRM server at least 3 times sequentially
-# (snap start, snap end, route) — each a real network round-trip, ~1.5-2s
-# apiece. The same start/end pairs get requested constantly in practice
-# (the page's own default route on every load, the campus preset buttons),
-# so a short-lived cache turns those repeat requests instant instead of
-# re-paying the full ~4-5s external round-trip every single time.
-_ROUTE_CACHE_TTL_SECONDS = 300
-_ROUTE_CACHE: Dict[tuple, tuple] = {}
-_ROUTE_CACHE_LOCK = threading.Lock()
+GRAPH_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "campus_paths.json")
+WALKING_SPEED_M_PER_MIN = 80.0  # ~4.8 km/h
+MAX_SNAP_M = 250.0
+ROUTE_PROFILES = {"fastest": 0.0, "balanced": 1.5, "coolest": 4.0}
 
 
-def _route_cache_key(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> tuple:
-    return (round(start_lat, 5), round(start_lon, 5), round(end_lat, 5), round(end_lon, 5))
+def _meters(a, b) -> float:
+    return haversine_distance(a[0], a[1], b[0], b[1]) * 1000.0
+
+
+class CampusGraph:
+    def __init__(self, db: Session):
+        with open(GRAPH_PATH, encoding="utf-8") as f:
+            raw = json.load(f)
+        self.nodes = {int(k): tuple(v) for k, v in raw["nodes"].items()}
+        self.adj: Dict[int, List[tuple]] = {}
+        for way in raw["ways"]:
+            label = way["name"] or {"footway": "footpath", "path": "path", "steps": "steps"}.get(way["highway"], "campus road")
+            for a, b in zip(way["nodes"], way["nodes"][1:]):
+                length = _meters(self.nodes[a], self.nodes[b])
+                self.adj.setdefault(a, []).append((b, length, label))
+                self.adj.setdefault(b, []).append((a, length, label))
+
+        # Route only on the largest connected component; small islands are
+        # disconnected service lanes that can't reach anything.
+        self.main = max(self._components(), key=len)
+
+        # Heat at each node = nearest seeded heat point (static dataset).
+        pts = [(p.latitude, p.longitude, p.heat_risk) for p in db.query(HeatData).all()]
+        self.heat = {
+            n: min(pts, key=lambda p: (p[0] - lat) ** 2 + (p[1] - lon) ** 2)[2] if pts else 50.0
+            for n, (lat, lon) in self.nodes.items() if n in self.adj
+        }
+
+    def _components(self):
+        seen = set()
+        for start in self.adj:
+            if start in seen:
+                continue
+            comp, stack = {start}, [start]
+            while stack:
+                for nxt, _, _ in self.adj[stack.pop()]:
+                    if nxt not in comp:
+                        comp.add(nxt)
+                        stack.append(nxt)
+            seen |= comp
+            yield comp
+
+    def nearest(self, lat: float, lon: float) -> tuple[int, float]:
+        # ponytail: linear scan over ~600 nodes; add a grid index if the graph grows 100x.
+        node = min(self.main, key=lambda n: _meters((lat, lon), self.nodes[n]))
+        return node, _meters((lat, lon), self.nodes[node])
+
+    def shortest(self, source: int, target: int, alpha: float) -> List[tuple]:
+        """Dijkstra; returns [(node, label_of_edge_into_node)]."""
+        dist = {source: 0.0}
+        prev: Dict[int, tuple] = {}
+        queue = [(0.0, source)]
+        while queue:
+            cost, node = heapq.heappop(queue)
+            if node == target:
+                break
+            if cost > dist[node]:
+                continue
+            for nxt, length, label in self.adj[node]:
+                heat = (self.heat[node] + self.heat[nxt]) / 200.0
+                new_cost = cost + length * (1.0 + alpha * heat)
+                if new_cost < dist.get(nxt, math.inf):
+                    dist[nxt] = new_cost
+                    prev[nxt] = (node, label)
+                    heapq.heappush(queue, (new_cost, nxt))
+        if target not in dist:
+            raise ValueError("These two points are not connected by any mapped campus path.")
+        path = [(target, prev.get(target, (None, ""))[1])]
+        while path[-1][0] != source:
+            node = prev[path[-1][0]][0]
+            path.append((node, prev.get(node, (None, ""))[1]))
+        path.reverse()
+        return path
+
+
+_graph: Optional[CampusGraph] = None
+_graph_lock = threading.Lock()
+
+
+def get_graph(db: Session) -> CampusGraph:
+    # ponytail: built once per process; restart the API after re-seeding heat data.
+    global _graph
+    with _graph_lock:
+        if _graph is None:
+            _graph = CampusGraph(db)
+        return _graph
+
+
+def _directions(segments: List[tuple]) -> List[Dict[str, str]]:
+    """Group consecutive edges on the same way into one instruction."""
+    steps: List[List] = []
+    for label, length in segments:
+        if steps and steps[-1][0] == label:
+            steps[-1][1] += length
+        else:
+            steps.append([label, length])
+    out = [
+        {"instruction": f"{'Head along' if i == 0 else 'Continue onto'} {label}", "distance": f"{length:.0f}m"}
+        for i, (label, length) in enumerate(steps)
+    ]
+    out.append({"instruction": "Arrive at your destination", "distance": ""})
+    return out
+
 
 class RouteService:
-    @staticmethod
-    def decode_polyline(encoded: str) -> List[List[float]]:
-        """Decode a Google-style encoded polyline into [lat, lon] pairs."""
-        points = []
-        index = latitude = longitude = 0
-        while index < len(encoded):
-            result = shift = 0
-            while index < len(encoded):
-                byte = ord(encoded[index]) - 63
-                index += 1
-                result |= (byte & 0x1f) << shift
-                shift += 5
-                if byte < 0x20:
-                    break
-            latitude += ~(result >> 1) if result & 1 else result >> 1
-
-            result = shift = 0
-            while index < len(encoded):
-                byte = ord(encoded[index]) - 63
-                index += 1
-                result |= (byte & 0x1f) << shift
-                shift += 5
-                if byte < 0x20:
-                    break
-            longitude += ~(result >> 1) if result & 1 else result >> 1
-            points.append([latitude / 1e5, longitude / 1e5])
-        return points
-
-    @staticmethod
-    def extract_route_coordinates(raw_route: Dict[str, Any]) -> List[List[float]]:
-        """Normalize common GeoJSON geometry shapes to [latitude, longitude]."""
-        geometry = raw_route.get("geometry")
-        coordinates = geometry.get("coordinates") if isinstance(geometry, dict) else geometry
-        if isinstance(coordinates, str):
-            return RouteService.decode_polyline(coordinates)
-        if not isinstance(coordinates, list) or not coordinates:
-            return []
-
-        def flatten(points: Any) -> List[List[float]]:
-            if not isinstance(points, list) or not points:
-                return []
-            if len(points) >= 2 and all(isinstance(value, (int, float)) for value in points[:2]):
-                return [[round(float(points[1]), 6), round(float(points[0]), 6)]]
-            result = []
-            for child in points:
-                result.extend(flatten(child))
-            return result
-
-        normalized = flatten(coordinates)
-        return normalized if len(normalized) >= 2 else []
-
-    @staticmethod
-    def snap_to_walkable_point(lat: float, lon: float) -> tuple[float, float, float]:
-        """Snap an arbitrary campus pin to the nearest mapped walking segment."""
-        nearest_url = OSRM_BASE_URL.replace('/route/', '/nearest/')
-        search_points = [(lat, lon)]
-        for offset in (0.00025, -0.00025, 0.0005, -0.0005):
-            search_points.extend([(lat + offset, lon), (lat, lon + offset)])
-
-        for candidate_lat, candidate_lon in search_points:
-            url = f"{nearest_url}/{candidate_lon},{candidate_lat}?number=3"
-            for attempt in range(2):
-                try:
-                    response = requests.get(url, timeout=10)
-                    response.raise_for_status()
-                    data = response.json()
-                    for waypoint in data.get("waypoints", []):
-                        if waypoint.get("location"):
-                            snapped_lon, snapped_lat = waypoint["location"]
-                            return float(snapped_lat), float(snapped_lon), float(waypoint.get("distance", 0.0))
-                    break
-                except requests.RequestException as exc:
-                    if attempt == 1:
-                        print(f"Walking snap attempt failed: {exc}")
-                    else:
-                        time.sleep(0.15)
-        raise ValueError("No mapped walking path was found near one of the selected SRM campus pins")
-
-    @staticmethod
-    def fetch_osrm_routes(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> List[Dict[str, Any]]:
-        """Fetches route options from public OpenStreetMap OSRM API."""
-        url = f"{OSRM_BASE_URL}/{start_lon},{start_lat};{end_lon},{end_lat}?overview=full&geometries=geojson&steps=true&alternatives=true"
-        for attempt in range(3):
-            try:
-                resp = requests.get(url, timeout=12)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("code") == "Ok" and "routes" in data:
-                        return data["routes"]
-            except requests.RequestException as exc:
-                if attempt == 2:
-                    print(f"Walking route request failed: {exc}")
-                else:
-                    time.sleep(0.2)
-        
-        return []
-
-    @staticmethod
-    def create_alternative_geometry(coords: List[List[float]], bend_factor: float, target_lat: float, target_lon: float) -> List[List[float]]:
-        """Generates shaded/balanced route geometries bending middle points towards green/park zones."""
-        if len(coords) < 4:
-            return coords
-
-        new_coords = []
-        n = len(coords)
-
-        for i, (lat, lon) in enumerate(coords):
-            if i == 0 or i == n - 1:
-                new_coords.append([lat, lon])
-            else:
-                weight = math.sin((i / n) * math.pi) * bend_factor
-                bended_lat = lat + (target_lat - lat) * weight
-                bended_lon = lon + (target_lon - lon) * weight
-                new_coords.append([round(bended_lat, 6), round(bended_lon, 6)])
-
-        return new_coords
-
     @staticmethod
     def sample_points_along_route(coords: List[List[float]], max_samples: int = 16) -> List[List[float]]:
         if len(coords) <= max_samples:
@@ -159,67 +146,33 @@ class RouteService:
         route_type: str,
         distance_km: float,
         duration_min: float,
-        steps: Optional[List[Dict[str, Any]]] = None
+        turn_by_turn: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
         sampled = RouteService.sample_points_along_route(coords, max_samples=16)
-        
+
         sampled_heat_points = []
         heat_scores = []
         cum_dist = 0.0
-
         for i, (lat, lon) in enumerate(sampled):
             if i > 0:
-                prev_lat, prev_lon = sampled[i-1][0], sampled[i-1][1]
-                cum_dist += haversine_distance(prev_lat, prev_lon, lat, lon)
-
+                cum_dist += haversine_distance(sampled[i - 1][0], sampled[i - 1][1], lat, lon)
             risk_score, risk_level, env_data = heat_service.evaluate_coordinate_heat_risk(db, lat, lon)
-            
             heat_scores.append(risk_score)
-
             sampled_heat_points.append({
                 "lat": lat,
                 "lon": lon,
                 "distance_km": round(cum_dist, 2),
                 "heat_risk": round(risk_score, 1),
                 "risk_level": risk_level,
-                "temperature": env_data.get("temperature"),
-                "humidity": env_data.get("humidity"),
-                "uv_index": env_data.get("uv_index"),
-                "vegetation_index": env_data.get("vegetation_index"),
-                "building_density": env_data.get("building_density"),
-                "shade_score": env_data.get("shade_score")
+                **{k: env_data.get(k) for k in ("temperature", "humidity", "uv_index", "vegetation_index", "building_density", "shade_score")},
             })
 
         avg_heat_risk = round(float(np.mean(heat_scores)), 1)
-        max_heat_risk = round(float(np.max(heat_scores)), 1)
-        
-        heat_risk_level = "Low"
-        if avg_heat_risk > 75.0:
-            heat_risk_level = "Extreme"
-        elif avg_heat_risk > 50.0:
-            heat_risk_level = "High"
-        elif avg_heat_risk > 25.0:
-            heat_risk_level = "Moderate"
-
-        shade_scores = [point["shade_score"] for point in sampled_heat_points if point["shade_score"] is not None]
-        shaded_pct = round(float(np.mean(shade_scores)) * 100) if shade_scores else 0
-
-        # Build heat profile curve points (0 to 100% position)
-        num_profile_pts = len(heat_scores)
-        heat_profile = [
-            {"position": int((i / (num_profile_pts - 1)) * 100), "score": round(score, 1)}
-            for i, score in enumerate(heat_scores)
-        ]
-
-        turn_by_turn = []
-        for step in steps or []:
-            maneuver = step.get("maneuver", {})
-            instruction = maneuver.get("instruction") or maneuver.get("type", "Continue")
-            step_distance = step.get("distance", 0.0)
-            turn_by_turn.append({
-                "instruction": instruction,
-                "distance": f"{step_distance:.0f}m"
-            })
+        heat_risk_level = (
+            "Extreme" if avg_heat_risk > 75 else "High" if avg_heat_risk > 50 else "Moderate" if avg_heat_risk > 25 else "Low"
+        )
+        shade_scores = [p["shade_score"] for p in sampled_heat_points if p["shade_score"] is not None]
+        last = max(len(heat_scores) - 1, 1)
 
         return {
             "route_name": route_name,
@@ -227,149 +180,78 @@ class RouteService:
             "distance_km": round(distance_km, 2),
             "duration_minutes": round(duration_min, 1),
             "average_heat_risk": avg_heat_risk,
-            "maximum_heat_risk": max_heat_risk,
+            "maximum_heat_risk": round(float(np.max(heat_scores)), 1),
             "heat_risk_level": heat_risk_level,
-            "shaded_area_percentage": shaded_pct,
-            "heat_profile": heat_profile,
+            "shaded_area_percentage": round(float(np.mean(shade_scores)) * 100) if shade_scores else 0,
+            "heat_profile": [{"position": int(i / last * 100), "score": round(s, 1)} for i, s in enumerate(heat_scores)],
             "geometry": coords,
             "sampled_points": sampled_heat_points,
-            "turn_by_turn": turn_by_turn
+            "turn_by_turn": turn_by_turn or [],
         }
 
     @staticmethod
     def process_and_recommend_routes(db: Session, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
-        cache_key = _route_cache_key(start_lat, start_lon, end_lat, end_lon)
-        now = time.monotonic()
-        with _ROUTE_CACHE_LOCK:
-            cached = _ROUTE_CACHE.get(cache_key)
-            if cached and now - cached[0] < _ROUTE_CACHE_TTL_SECONDS:
-                return deepcopy(cached[1])
+        graph = get_graph(db)
+        source, start_snap = graph.nearest(start_lat, start_lon)
+        target, end_snap = graph.nearest(end_lat, end_lon)
+        if max(start_snap, end_snap) > MAX_SNAP_M:
+            raise ValueError("No mapped campus path runs near one of these pins. Move it closer to a road or footpath.")
+        if source == target:
+            raise ValueError("Both pins snap to the same point on the path network. Pick places further apart.")
 
-        result = RouteService._compute_route_recommendation(db, start_lat, start_lon, end_lat, end_lon)
+        routes: Dict[str, Dict[str, Any]] = {}
+        paths = set()
+        for route_type, alpha in ROUTE_PROFILES.items():
+            path = graph.shortest(source, target, alpha)
+            nodes = [n for n, _ in path]
+            paths.add(tuple(nodes))
+            coords = [list(graph.nodes[n]) for n in nodes]
+            edges = [(label, _meters(graph.nodes[a], graph.nodes[b])) for (a, _), (b, label) in zip(path, path[1:])]
+            meters = sum(length for _, length in edges)
+            route = RouteService.analyze_route_heat(
+                db, coords, f"{route_type.title()} Route", route_type,
+                meters / 1000.0, meters / WALKING_SPEED_M_PER_MIN, _directions(edges),
+            )
+            route["heat_segments"] = [
+                {"coords": [list(graph.nodes[a]), list(graph.nodes[b])],
+                 "heat_risk": round((graph.heat[a] + graph.heat[b]) / 2, 1)}
+                for a, b in zip(nodes, nodes[1:])
+            ]
+            routes[route_type] = route
 
-        with _ROUTE_CACHE_LOCK:
-            _ROUTE_CACHE[cache_key] = (now, deepcopy(result))
-        return result
+        max_dist = max(r["distance_km"] for r in routes.values()) or 1.0
+        max_dur = max(r["duration_minutes"] for r in routes.values()) or 1.0
+        for r in routes.values():
+            r["final_score"] = round(
+                0.5 * r["average_heat_risk"] / 100.0 + 0.25 * r["distance_km"] / max_dist + 0.25 * r["duration_minutes"] / max_dur, 3
+            )
 
-    @staticmethod
-    def _compute_route_recommendation(db: Session, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
-        # The start/end snap calls are independent OSRM requests — running them
-        # concurrently instead of one-after-another cuts a real ~1.5-2s off
-        # every single request, cached or not.
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            start_future = executor.submit(RouteService.snap_to_walkable_point, start_lat, start_lon)
-            end_future = executor.submit(RouteService.snap_to_walkable_point, end_lat, end_lon)
-            snapped_start_lat, snapped_start_lon, start_snap_distance = start_future.result()
-            snapped_end_lat, snapped_end_lon, end_snap_distance = end_future.result()
-
-        if not route_geometry_is_within_srm_campus([
-            [snapped_start_lat, snapped_start_lon],
-            [snapped_end_lat, snapped_end_lon]
-        ]):
-            raise ValueError("The nearest mapped walking path is outside the SRM campus boundary")
-
-        raw_routes = RouteService.fetch_osrm_routes(
-            snapped_start_lat,
-            snapped_start_lon,
-            snapped_end_lat,
-            snapped_end_lon
+        coolest, fastest = routes["coolest"], routes["fastest"]
+        heat_reduction = max(0.0, round(fastest["average_heat_risk"] - coolest["average_heat_risk"], 1))
+        extra_time = max(0.0, round(coolest["duration_minutes"] - fastest["duration_minutes"], 1))
+        cost = "at no extra time" if extra_time < 0.5 else f"for {round(extra_time)} extra minute{'s' if round(extra_time) != 1 else ''}"
+        summary = (
+            f"The coolest route lowers average heat exposure by {heat_reduction} points {cost}."
+            if heat_reduction > 0 else
+            "Every mapped path between these points has similar heat exposure, so the fastest one is also the coolest."
         )
 
-        route_options = []
-        for raw_route in raw_routes:
-            coordinates = RouteService.extract_route_coordinates(raw_route)
-            if len(coordinates) < 2:
-                continue
-            route_options.append({
-                "coords": coordinates,
-                "distance_km": raw_route.get("distance", 0.0) / 1000.0,
-                "duration_min": raw_route.get("duration", 0.0) / 60.0,
-                "steps": [step for leg in raw_route.get("legs", []) for step in leg.get("steps", [])]
-            })
-
-        campus_route_options = [
-            option for option in route_options
-            if route_geometry_is_within_srm_campus(option["coords"])
-        ]
-
-        if not campus_route_options:
-            if route_options:
-                raise ValueError(
-                    "No mapped walking path stays within the SRM campus between these two points "
-                    "(the nearest route detours onto public roads outside campus). Try selecting "
-                    "locations that are closer together or connected by an internal campus path."
-                )
-            raise ValueError("Routing provider returned no usable route geometry")
-
-        route_options = campus_route_options
-
-        mapped_route_count = len(route_options)
-
-        analyzed_routes = []
-        for option in route_options:
-            analyzed_routes.append(RouteService.analyze_route_heat(
-                db,
-                option["coords"],
-                "Route option",
-                "alternative",
-                option["distance_km"],
-                option["duration_min"],
-                option["steps"]
-            ))
-
-        fastest_route = deepcopy(min(analyzed_routes, key=lambda route: route["duration_minutes"]))
-        coolest_route = deepcopy(min(analyzed_routes, key=lambda route: (route["average_heat_risk"], route["duration_minutes"])))
-
-        max_dist = max(route["distance_km"] for route in analyzed_routes) or 1.0
-        max_dur = max(route["duration_minutes"] for route in analyzed_routes) or 1.0
-        balanced_route = deepcopy(min(
-            analyzed_routes,
-            key=lambda route: (
-                0.5 * route["average_heat_risk"] / 100.0
-                + 0.25 * route["distance_km"] / max_dist
-                + 0.25 * route["duration_minutes"] / max_dur
-            )
-        ))
-
-        coolest_route["route_name"] = "Coolest Route"
-        coolest_route["route_type"] = "coolest"
-        balanced_route["route_name"] = "Balanced Route"
-        balanced_route["route_type"] = "balanced"
-        fastest_route["route_name"] = "Fastest Route"
-        fastest_route["route_type"] = "fastest"
-
-        # Keep three cards useful even when OSRM only returns one road option.
-        for route in {id(coolest_route): coolest_route, id(balanced_route): balanced_route, id(fastest_route): fastest_route}.values():
-            route["final_score"] = round(
-                0.5 * route["average_heat_risk"] / 100.0
-                + 0.25 * route["distance_km"] / max_dist
-                + 0.25 * route["duration_minutes"] / max_dur,
-                3
-            )
-
-        # Calculate scores for ranking
-        recommended = "coolest_route" if coolest_route["average_heat_risk"] <= balanced_route["average_heat_risk"] else "balanced_route"
-
-        heat_reduction = max(0.0, round(fastest_route["average_heat_risk"] - coolest_route["average_heat_risk"], 1))
-        extra_time = max(0.0, round(coolest_route["duration_minutes"] - fastest_route["duration_minutes"], 1))
-
-        comparison = {
-            "heat_reduction_points": heat_reduction,
-            "extra_time_minutes": extra_time,
-            "mapped_route_count": mapped_route_count,
-            "alternatives_available": mapped_route_count > 1,
-            "start_snap_distance_m": round(start_snap_distance, 1),
-            "end_snap_distance_m": round(end_snap_distance, 1),
-            "pins_snapped": start_snap_distance > 2.0 or end_snap_distance > 2.0,
-            "summary": f"Routes with more trees and greenery reduce heat exposure by up to {int(heat_reduction)} points."
-        }
-
         return {
-            "coolest_route": coolest_route,
-            "balanced_route": balanced_route,
-            "fastest_route": fastest_route,
-            "recommended_route": recommended,
-            "comparison": comparison
+            "coolest_route": coolest,
+            "balanced_route": routes["balanced"],
+            "fastest_route": fastest,
+            "recommended_route": "coolest_route" if heat_reduction > 0 else "fastest_route",
+            "comparison": {
+                "heat_reduction_points": heat_reduction,
+                "extra_time_minutes": extra_time,
+                "mapped_route_count": len(paths),
+                "alternatives_available": len(paths) > 1,
+                "start_snap_distance_m": round(start_snap, 1),
+                "end_snap_distance_m": round(end_snap, 1),
+                "pins_snapped": start_snap > 2.0 or end_snap > 2.0,
+                "summary": summary,
+            },
         }
+
 
 route_service = RouteService()

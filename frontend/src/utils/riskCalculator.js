@@ -103,8 +103,8 @@ export function calculateHeatRisk({
   let heatIntensity = 'Cool';
 
   if (score > 75) {
-    riskLevel = 'Severe';
-    heatIntensity = 'Severe';
+    riskLevel = 'Extreme';
+    heatIntensity = 'Extreme';
   } else if (score > 50) {
     riskLevel = 'High';
     heatIntensity = 'High';
@@ -140,7 +140,7 @@ export function getRiskColor(score) {
   if (score <= 25) return '#5F8F6B'; // Sage Green (Low)
   if (score <= 50) return '#E69A2D'; // Heat Amber (Moderate)
   if (score <= 75) return '#D96C2F'; // Heat Orange (High)
-  return '#C94C4C'; // Coral Red (Severe)
+  return '#C94C4C'; // Coral Red (Extreme)
 }
 
 /**

@@ -12,7 +12,7 @@
 | **Machine Learning** | scikit-learn `RandomForestRegressor` trained on a synthetic, formula-generated dataset |
 | **Database** | PostgreSQL if reachable, otherwise an automatic local SQLite fallback (`backend/urban_heat.db`) |
 | **Mapping** | Leaflet + OpenStreetMap raster tiles (**not** Mapbox — see [§4](#4-technology-stack)) |
-| **Routing Engine** | Public OSRM foot-routing server (`routing.openstreetmap.de/routed-foot`) |
+| **Routing Engine** | In-process heat-weighted Dijkstra over the OpenStreetMap campus path graph (`backend/data/campus_paths.json`) |
 | **Live Weather API** | Open-Meteo (frontend-only, Home page widget) |
 | **Geocoding** | OpenStreetMap Nominatim, proxied through the backend and bounded to campus |
 
@@ -49,9 +49,9 @@ SRM KTR is a large, walkable campus where students, faculty, and staff routinely
 UrbanHeat combines:
 
 1. A spatial heat-risk dataset and a trained ML model that scores any coordinate on campus for heat exposure (0–100).
-2. Live OSRM-based walking-route alternatives between two campus points.
+2. Heat-aware walking routes between two campus points, computed in-process over the campus path network.
 3. A route-scoring step that samples each candidate route and picks the option with the best combination of low heat exposure and reasonable distance/duration.
-4. An interactive Leaflet heat-map, analytics dashboards, a "what-if" ML risk simulator, and campus-specific location search — all scoped to the SRM KTR campus boundary.
+4. An interactive campus map with a time-of-day heat scrubber, analytics dashboards, a "what-if" ML risk simulator, and campus-specific location search — all scoped to the SRM KTR campus boundary.
 
 ### 1.5 Target Users
 
@@ -62,7 +62,7 @@ UrbanHeat combines:
 | Campus visitors | Unfamiliar with campus layout, benefit from heat-aware routing |
 | Pedestrians | The only travel mode this project actually implements (see [§1.6](#16-scope-note)) |
 
-`Drivers` and `Cyclists` are **not** included — the routing engine is hard-configured to OSRM's `routed-foot` (walking) profile only (`backend/app/services/route_service.py:13`). There is no vehicle or bicycle routing profile anywhere in the code.
+`Drivers` and `Cyclists` are **not** included — the router uses a walking speed (80 m/min) over pedestrian-accessible OSM ways only, with public highways excluded (`backend/app/services/route_service.py`). There is no vehicle or bicycle routing profile anywhere in the code.
 
 ### 1.6 Scope Note
 
@@ -72,7 +72,7 @@ Every backend endpoint that accepts coordinates rejects points outside the SRM K
 
 ## 2. Abstract
 
-UrbanHeat is a full-stack environmental-intelligence platform scoped to the SRM Institute of Science and Technology, Kattankulathur campus. Conventional pedestrian navigation optimizes distance and time only; UrbanHeat additionally incorporates predicted heat exposure into route selection. The backend, built with FastAPI, exposes a spatial heat dataset (a synthetically generated but geographically structured grid covering campus, stored via SQLAlchemy in PostgreSQL or a local SQLite fallback) and a `scikit-learn RandomForestRegressor` model trained to predict a 0–100 heat-risk score from six environmental features (temperature, humidity, UV index, vegetation index, building density, shade score). For routing, the backend calls the public OSRM foot-routing service to obtain real walkable-path alternatives between two campus points snapped to the OSM street/path graph, discards any alternative whose geometry leaves the campus boundary, samples each remaining candidate at up to 16 points along its length, evaluates predicted heat risk at each sampled point via the trained model, and returns three labeled routes — Fastest, Coolest, and Balanced — with the Coolest route recommended by default. The React/Vite frontend renders this data on a Leaflet map with a canvas heat-gradient overlay, exposes campus-specific location search (a curated static POI list plus a Nominatim-backed search bounded to campus), an interactive ML "what-if" simulator, and analytics/insight dashboards. A client-side Open-Meteo integration additionally provides a live current-weather widget on the home page, independent of the backend's heat-risk pipeline. The result is a working demonstration of climate-aware routing on a single, well-understood campus, built entirely on free/public services (OpenStreetMap tiles, OSRM, Nominatim, Open-Meteo) with no paid API dependency such as Mapbox.
+UrbanHeat is a full-stack environmental-intelligence platform scoped to the SRM Institute of Science and Technology, Kattankulathur campus. Conventional pedestrian navigation optimizes distance and time only; UrbanHeat additionally incorporates predicted heat exposure into route selection. The backend, built with FastAPI, exposes a spatial heat dataset (a synthetically generated but geographically structured grid covering campus, stored via SQLAlchemy in PostgreSQL or a local SQLite fallback) and a `scikit-learn RandomForestRegressor` model trained to predict a 0–100 heat-risk score from six environmental features (temperature, humidity, UV index, vegetation index, building density, shade score). For routing, the backend snaps two campus points onto a committed copy of the OpenStreetMap campus path network and runs heat-weighted Dijkstra three times (fastest, balanced, coolest), samples each candidate at up to 16 points along its length, evaluates predicted heat risk at each sampled point via the trained model, and returns three labeled routes — Fastest, Coolest, and Balanced — with the Coolest route recommended by default. Location detail uses live Open-Meteo weather in the model when available. The React/Vite frontend renders this data on Leaflet maps (routes coloured edge by edge by heat), exposes campus-specific location search (a curated static POI list plus a Nominatim-backed search bounded to campus), an interactive ML "what-if" simulator, and analytics/insight dashboards. A client-side Open-Meteo integration additionally provides feels-like, wind and hourly readings on the home page. The result is a working demonstration of climate-aware routing on a single, well-understood campus, built entirely on free/public services (OpenStreetMap data and tiles, Nominatim, Open-Meteo) with no paid API dependency such as Mapbox.
 
 ---
 
@@ -81,7 +81,7 @@ UrbanHeat is a full-stack environmental-intelligence platform scoped to the SRM 
 1. Provide a spatial visualization of predicted heat risk across the SRM KTR campus.
 2. Predict heat-risk score (0–100) for any coordinate on campus using a trained ML model.
 3. Provide campus-specific location search (curated POIs + bounded OSM geocoding).
-4. Generate real, walkable OSRM route alternatives between two campus points.
+4. Generate real, walkable route alternatives between two campus points over the mapped campus path network.
 5. Analyze environmental conditions (heat) at sampled points along each candidate route.
 6. Score and rank route alternatives to recommend the lowest-heat-exposure practical route.
 7. Surface an hourly heat-risk trend and location-specific mitigation recommendations.
@@ -100,13 +100,13 @@ Objectives **not** pursued in the current implementation (see [§9](#9-existing-
 | Vite 6 | Frontend dev server & production build | Implemented |
 | Plain CSS (`App.css`, `index.css`) | Design tokens (CSS custom properties) + component styling | Implemented |
 | **Tailwind CSS** | — | Not used (no dependency in `package.json`) |
-| Leaflet / react-leaflet / `leaflet.heat` | Interactive map, heat-gradient canvas overlay, route polylines | Implemented |
+| Leaflet / react-leaflet | Interactive maps, draggable route pins, heat-coloured route polylines | Implemented |
 | **Mapbox GL JS** | — | **Not used anywhere in this codebase** |
 | lucide-react | Icon set | Implemented |
 | axios | Frontend → backend HTTP client (`services/api.js`) | Implemented |
 | Python 3.13 / FastAPI | REST backend, all `/api/*` and `/health` endpoints | Implemented |
 | Pydantic v2 | Request/response schema validation (`app/schemas/schemas.py`) | Implemented |
-| `requests` (sync HTTP) | Backend → OSRM and Nominatim calls | Implemented (not HTTPX) |
+| `requests` (sync HTTP) | Backend → Nominatim and Open-Meteo calls | Implemented (not HTTPX) |
 | SQLAlchemy 2.0 | ORM for the single `heat_data` table | Implemented |
 | PostgreSQL | Attempted first at startup (2s timeout); used if reachable | Partial — Configured, optional |
 | SQLite | Automatic fallback database (`backend/urban_heat.db`) | Implemented, default in practice |
@@ -114,7 +114,7 @@ Objectives **not** pursued in the current implementation (see [§9](#9-existing-
 | scikit-learn | `RandomForestRegressor` heat-risk model | Implemented, currently the model actually shipped |
 | XGBoost | Alternative trainable model, selected via `USE_XGBOOST=true` env var at training time only | Partial — Available but not the model currently trained/shipped |
 | joblib | Model serialization (`ml/heat_risk_model.joblib`) | Implemented |
-| OSRM (`routing.openstreetmap.de/routed-foot`) | Real walking-route alternatives, nearest-point snapping | Implemented |
+| OpenStreetMap path data (Overpass, one-off) | Campus walking network for the in-process router | Implemented |
 | **Mapbox Directions API** | — | Not used |
 | OpenStreetMap Nominatim | Campus place-name search (backend-proxied, bounded) | Implemented |
 | Open-Meteo | Live current weather + 24h forecast widget | Implemented, **frontend-only**, not used in backend route/heat scoring |
@@ -124,7 +124,7 @@ Objectives **not** pursued in the current implementation (see [§9](#9-existing-
 
 ## 5. Problem Statement
 
-> Conventional navigation systems optimize travel distance and/or travel time and have no model of environmental exposure. On a walkable campus in a hot climate, this means pedestrians are routed across the most heat-exposed path available whenever it is marginally shorter or faster, with no visibility into the thermal cost of that choice. UrbanHeat addresses this gap for the SRM Kattankulathur campus by combining a trained heat-risk prediction model with real OSRM-derived walking-route alternatives, scoring each alternative's predicted heat exposure, and recommending the route with the best heat-to-practicality trade-off — while explicitly declining to operate outside the campus boundary it has been built and validated for.
+> Conventional navigation systems optimize travel distance and/or travel time and have no model of environmental exposure. On a walkable campus in a hot climate, this means pedestrians are routed across the most heat-exposed path available whenever it is marginally shorter or faster, with no visibility into the thermal cost of that choice. UrbanHeat addresses this gap for the SRM Kattankulathur campus by combining a trained heat-risk prediction model with heat-weighted routing over the real campus path network, scoring each alternative's predicted heat exposure, and recommending the route with the best heat-to-practicality trade-off — while explicitly declining to operate outside the campus boundary it has been built and validated for.
 
 ---
 
@@ -132,7 +132,7 @@ Objectives **not** pursued in the current implementation (see [§9](#9-existing-
 
 | Feature | Conventional Navigation (e.g. Google/OSM routers) | UrbanHeat |
 |---|---|---|
-| Road/path routing | Yes | Yes (via OSRM foot profile) |
+| Road/path routing | Yes | Yes (in-process, campus path graph) |
 | Distance | Yes | Yes |
 | Duration | Yes | Yes |
 | Traffic-aware routing | Depending on provider | Not implemented |
@@ -155,7 +155,7 @@ flowchart TD
     FE -->|axios REST calls| BE[FastAPI Backend]
     BE --> DB[(PostgreSQL or SQLite\nheat_data table)]
     BE --> ML[Trained RandomForest\nheat_risk_model.joblib]
-    BE -->|HTTP| OSRM[Public OSRM\nrouted-foot service]
+    BE --> GR[(campus_paths.json\nOSM path graph)]
     BE -->|HTTP| NOM[OpenStreetMap Nominatim\ngeocoding]
     FE -->|HTTP, client-side only| OM[Open-Meteo\nweather API]
     FE -->|map tiles| OSM[OpenStreetMap\nraster tiles]
@@ -193,7 +193,7 @@ app/
                               /api/location-heat-detail, /api/heat-trend, /api/recommendations
   api/routes.py               /api/recommend-route, /api/route-heat
   services/heat_service.py    DB lookup + spatial fallback + ML scoring
-  services/route_service.py   OSRM integration, route filtering, sampling, scoring
+  services/route_service.py   campus path graph, heat-weighted Dijkstra, sampling, scoring
   services/ml_service.py      Thin wrapper around ml/predict.py
   services/campus_config.py   SRM KTR bounding box + boundary checks
   schemas/schemas.py          Pydantic request/response models
@@ -212,11 +212,10 @@ Full explanation of each service: [ARCHITECTURE.md §Backend](ARCHITECTURE.md#ba
 
 ## 10. API Integration
 
-### 10.1 OSRM (Routing)
+### 10.1 OpenStreetMap path data (Routing)
 
-- Base URL: `https://routing.openstreetmap.de/routed-foot/route/v1/driving` (a public OSRM demo instance configured with the **foot** profile — the `/driving` in the path is OSRM's fixed URL scheme, it does not mean car routing).
-- Used for: nearest-point snapping (`/nearest`) and route alternatives (`/route?alternatives=true`).
-- No API key required (public service) — this is also a documented limitation: it is a third-party demo server subject to rate limits and occasional unavailability (observed directly during testing — see [§14](#14-limitations--honest-assessment)).
+- Downloaded once through the Overpass API by `backend/scripts/build_campus_graph.py` and committed as `backend/data/campus_paths.json`.
+- Routing itself makes no network calls: pins are snapped and routed in-process (see [ROUTE_OPTIMIZATION.md](ROUTE_OPTIMIZATION.md)).
 
 ### 10.2 Nominatim (Geocoding)
 
@@ -270,7 +269,7 @@ Campus bounding box (`backend/app/services/campus_config.py`, mirrored in `front
 | Min | 12.8188 | 80.0372 |
 | Max | 12.8280 | 80.0516 |
 
-A ~90 m padding (`0.0008°`) is applied on both frontend and backend boundary checks because real OSRM footpath geometry near the campus edge can dip slightly outside the hand-drawn box.
+A ~90 m padding (`0.0008°`) is applied on both frontend and backend boundary checks because mapped paths near the campus edge can dip slightly outside the hand-drawn box.
 
 Sample of the 30-place curated POI list (full list in [DATA_AND_ENVIRONMENTAL_ANALYSIS.md](DATA_AND_ENVIRONMENTAL_ANALYSIS.md)):
 
@@ -297,13 +296,11 @@ The actual algorithm (verified from `backend/app/services/route_service.py`) is 
 ```text
 Start + End coordinates
         ↓
-Snap both to nearest walkable OSRM point (concurrent, campus-bound-checked)
+Snap both to the nearest node of the campus path graph
         ↓
-Fetch OSRM route alternatives (foot profile)
+Dijkstra x3, edge cost = length × (1 + alpha × heat/100), alpha = 0 / 1.5 / 4
         ↓
-Discard any alternative whose full geometry leaves the campus boundary
-        ↓
-Sample each remaining route at up to 16 points
+Sample each route at up to 16 points
         ↓
 Evaluate heat risk at each sampled point (DB lookup → ML model)
         ↓
@@ -324,7 +321,7 @@ There is **no distance-based detour cap** (no "20%" rule) in the implementation.
 
 - **Campus heat data is synthetic, not sensor-derived.** All 256 seeded points, and the fallback spatial-interpolation formula, are generated from a hand-designed mathematical formula (distance from an assumed "urban core" and "green belt" anchor point + random jitter), not from satellite imagery, IoT sensors, or measured land-surface temperature. See [DATA_AND_ENVIRONMENTAL_ANALYSIS.md](DATA_AND_ENVIRONMENTAL_ANALYSIS.md) for the exact formula.
 - **The committed database file is stale relative to the current seed script.** `scripts/seed_heat_data.py` currently targets a dense 16×16 grid strictly inside the SRM campus bounding box (256 points, all in-bounds). The `backend/urban_heat.db` file checked into this workspace was generated by an **earlier** version of the script that used a much wider ~10 km grid — as a result, only a handful of the 256 rows in the live database actually fall inside the campus box the app queries against. Re-running `python scripts/seed_heat_data.py` would regenerate a dataset matching current code intent. This is a data-freshness issue, not a code defect.
-- **OSRM is a public, unauthenticated third-party service.** It has no SLA, can rate-limit or intermittently fail, and route recommendation requests were observed to occasionally return `503 Service Unavailable` during testing purely due to this external dependency.
+- **Sparse campus path data.** OpenStreetMap maps ~170 campus ways, mostly roads, so many trips have a single sensible path and the three route options coincide. The UI states this rather than inventing alternatives.
 - **Two independent heat-risk formulas exist** — the Python backend's ML-model-plus-analytical-fallback (`ml/predict.py`), and a separately written JavaScript formula (`frontend/src/utils/riskCalculator.js`) used for a handful of client-only estimation paths (GPS "my location" points, simulator error fallback, printable report). They are conceptually similar but numerically different; they are not unified into a single source of truth.
 - **No air quality, traffic, or safety data or scoring exists anywhere in the code.** Any documentation or UI copy implying otherwise should be disregarded — see [§9](#9-existing-system-vs-proposed-system).
 - **No authentication, authorization, or rate limiting** on any backend endpoint.
@@ -350,9 +347,9 @@ Clearly **not implemented** today — potential future work only:
 
 ### Implemented
 
-- SRM KTR campus-bounded interactive Leaflet heat map with 5 selectable layers
+- SRM KTR campus-bounded interactive heat map with a time-of-day scrubber
 - Trained RandomForest heat-risk ML model with analytical-formula fallback
-- OSRM-based real walking-route alternatives, campus-boundary filtered
+- In-process heat-weighted walking routes over the OSM campus path graph
 - Three-way route comparison (Fastest / Coolest / Balanced) with a recommended pick
 - Route-level heat sampling, per-point breakdown, turn-by-turn steps
 - Campus POI search (static list) + bounded Nominatim search
@@ -365,7 +362,7 @@ Clearly **not implemented** today — potential future work only:
 ### Partially Implemented
 
 - PostgreSQL support (`geoalchemy2`/`psycopg2` installed, connection fallback logic exists, but no spatial column types are actually used, and no PostGIS-specific features are exercised)
-- "Balanced" route type (present and scored, but in practice near-identical to "Coolest" unless OSRM returns 3+ genuinely different alternatives, which the public server frequently does not for short campus-scale trips)
+- "Balanced" route type (present and scored, but in practice near-identical to "Coolest" unless the campus path graph offers a genuinely different, cooler corridor, which sparse OSM coverage often does not)
 
 ### Planned / Not Implemented
 

@@ -13,7 +13,7 @@ import {
   AlertTriangle,
   ArrowRight
 } from 'lucide-react';
-import { getRiskColor } from '../utils/riskCalculator';
+import { getRiskColor, calculateFeelsLike, calculateSurfaceTemp } from '../utils/riskCalculator';
 
 const SelectedLocationPanel = ({
   location,
@@ -35,26 +35,33 @@ const SelectedLocationPanel = ({
   const name = location.area || location.name || 'Selected Location';
   const city = location.city || 'SRM Kattankulathur';
   const zoneType = location.zoneType || 'Urban Microclimate Zone';
-  const temp = location.temperature ?? 34;
-  const feelsLike = location.feelsLike ?? (temp + 5);
-  const surfaceTemp = location.surfaceTemp ?? (temp + 4.5);
-  const heatIntensity = location.heatIntensity || location.heat_intensity || 'Moderate';
-  const riskLevel = location.riskLevel || location.risk_level || 'Moderate';
-  const riskScore = location.heatRiskScore || location.heat_risk || 50;
-  const vegIndex = location.vegetationIndex ?? location.vegetation_index ?? 0.35;
-  const vegLevel = location.vegetation || (vegIndex > 0.6 ? 'High' : vegIndex > 0.3 ? 'Moderate' : 'Low');
-  const builtDensity = location.builtUpDensity ?? location.building_density ?? 0.75;
-  const densityLevel = location.builtUpDensityLevel || (builtDensity > 0.7 ? 'High' : builtDensity > 0.4 ? 'Moderate' : 'Low');
-  const humidity = location.humidity ?? 60;
-  const uvIndex = location.uv_index ?? 8.0;
-  const lastUpdated = location.lastUpdated || 'Today, 01:30 PM';
+  // No invented fallbacks: missing readings render as "—". Feels-like and
+  // surface temperature are derived (NOAA heat index / surface balance) only
+  // from inputs we actually have.
+  const num = (v) => (Number.isFinite(v) ? v : null);
+  const temp = num(location.temperature);
+  const humidity = num(location.humidity);
+  const uvIndex = num(location.uvIndex ?? location.uv_index);
+  const riskLevel = location.riskLevel || location.risk_level || 'Unknown';
+  const riskScore = num(location.heatRiskScore ?? location.heat_risk);
+  const heatIntensity = location.heatIntensity || location.heat_intensity || riskLevel;
+  const vegIndex = num(location.vegetationIndex ?? location.vegetation_index);
+  const vegLevel = vegIndex === null ? 'Unknown' : vegIndex > 0.6 ? 'High' : vegIndex > 0.3 ? 'Moderate' : 'Low';
+  const builtDensity = num(location.builtUpDensity ?? location.building_density);
+  const densityLevel = builtDensity === null ? 'Unknown' : builtDensity > 0.7 ? 'High' : builtDensity > 0.4 ? 'Moderate' : 'Low';
+  const feelsLike = num(location.feelsLike) ?? (temp !== null && humidity !== null ? calculateFeelsLike(temp, humidity) : null);
+  const surfaceTemp = num(location.surfaceTemp)
+    ?? (temp !== null && builtDensity !== null && vegIndex !== null ? calculateSurfaceTemp(temp, builtDensity, vegIndex, uvIndex ?? 0) : null);
+  const show = (v, unit = '') => (v === null ? '—' : `${Math.round(v * 10) / 10}${unit}`);
+  const pct = (v) => (v === null ? '—' : `${Math.round(v * 100)}%`);
+  const lastUpdated = location.lastUpdated || (location.live_weather && location.observed_at ? `${location.observed_at.slice(11)} live` : null);
   const action = location.recommendedAction || 'Stay hydrated and limit direct sun exposure during peak afternoon hours.';
   const factorNote = location.hottestZone
     ? `Highest heat retention localized near ${location.hottestZone}.`
-    : (builtDensity > 0.7 ? 'Dense asphalt & concrete surfaces amplify thermal trapping.' : 'Moderate tree canopy helps mitigate extreme heat spikes.');
+    : ((builtDensity ?? 0) > 0.7 ? 'Dense asphalt & concrete surfaces amplify thermal trapping.' : 'Moderate tree canopy helps mitigate extreme heat spikes.');
 
   // Color mapping based on risk score / intensity
-  const riskColor = getRiskColor(riskScore);
+  const riskColor = getRiskColor(riskScore ?? 0);
 
   const getIntensityBadgeClass = (intensity) => {
     switch (intensity.toLowerCase()) {
@@ -75,7 +82,7 @@ const SelectedLocationPanel = ({
           <span className="location-type-pill">{zoneType}</span>
           <div className="timestamp-badge">
             <Clock size={12} />
-            <span>Updated: {lastUpdated}</span>
+            <span>{lastUpdated ? `Updated: ${lastUpdated}` : 'Campus dataset'}</span>
           </div>
         </div>
 
@@ -106,7 +113,7 @@ const SelectedLocationPanel = ({
           }}
         >
           <ShieldAlert size={14} />
-          <span>Risk Level: <strong>{riskLevel} ({riskScore}/100)</strong></span>
+          <span>Risk Level: <strong>{riskLevel}{riskScore !== null ? ` (${Math.round(riskScore)}/100)` : ''}</strong></span>
         </div>
       </div>
 
@@ -118,19 +125,19 @@ const SelectedLocationPanel = ({
             <span>Air Temperature</span>
           </div>
           <div className="stat-val-group">
-            <span className="stat-value">{temp}°C</span>
-            <span className="stat-sub">Feels Like {feelsLike}°C</span>
+            <span className="stat-value">{show(temp, '°C')}</span>
+            <span className="stat-sub">Feels like {show(feelsLike, '°C')}</span>
           </div>
         </div>
 
         <div className="metric-stat-card">
           <div className="stat-label">
             <Flame size={14} className="icon-surface" />
-            <span>Surface Temp</span>
+            <span>Surface Temp (est.)</span>
           </div>
           <div className="stat-val-group">
-            <span className="stat-value">{surfaceTemp}°C</span>
-            <span className="stat-sub">{surfaceTemp > 40 ? 'Severe Heat Trapping' : 'Moderate Radiation'}</span>
+            <span className="stat-value">{show(surfaceTemp, '°C')}</span>
+            <span className="stat-sub">{surfaceTemp === null ? 'Unavailable' : surfaceTemp > 40 ? 'Strong heat trapping' : 'Moderate radiation'}</span>
           </div>
         </div>
 
@@ -140,7 +147,7 @@ const SelectedLocationPanel = ({
             <span>Vegetation (NDVI)</span>
           </div>
           <div className="stat-val-group">
-            <span className="stat-value">{Math.round(vegIndex * 100)}%</span>
+            <span className="stat-value">{pct(vegIndex)}</span>
             <span className="stat-sub">{vegLevel} Canopy</span>
           </div>
         </div>
@@ -151,7 +158,7 @@ const SelectedLocationPanel = ({
             <span>Built-up Density</span>
           </div>
           <div className="stat-val-group">
-            <span className="stat-value">{Math.round(builtDensity * 100)}%</span>
+            <span className="stat-value">{pct(builtDensity)}</span>
             <span className="stat-sub">{densityLevel} Impervious</span>
           </div>
         </div>
@@ -162,7 +169,7 @@ const SelectedLocationPanel = ({
             <span>Humidity</span>
           </div>
           <div className="stat-val-group">
-            <span className="stat-value">{humidity}%</span>
+            <span className="stat-value">{show(humidity, '%')}</span>
             <span className="stat-sub">Relative</span>
           </div>
         </div>
@@ -173,8 +180,8 @@ const SelectedLocationPanel = ({
             <span>UV Radiation</span>
           </div>
           <div className="stat-val-group">
-            <span className="stat-value">{uvIndex}</span>
-            <span className="stat-sub">{uvIndex > 8 ? 'Very High' : 'Moderate'} UV</span>
+            <span className="stat-value">{show(uvIndex)}</span>
+            <span className="stat-sub">{uvIndex === null ? 'Unavailable' : uvIndex >= 8 ? 'Very high UV' : uvIndex >= 6 ? 'High UV' : uvIndex >= 3 ? 'Moderate UV' : 'Low UV'}</span>
           </div>
         </div>
       </div>

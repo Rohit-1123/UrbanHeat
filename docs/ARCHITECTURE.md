@@ -13,7 +13,8 @@ flowchart TD
 
     BE --> DB[(heat_data table\nPostgreSQL if reachable,\nelse local SQLite)]
     BE --> ML[RandomForestRegressor\nml/heat_risk_model.joblib]
-    BE -->|requests, foot profile| OSRM[Public OSRM Server\nrouting.openstreetmap.de/routed-foot]
+    BE --> GR[(data/campus_paths.json\nOSM campus path graph)]
+    BE -->|requests, cached 10 min| OMB[Open-Meteo current weather]
     BE -->|requests, bounded viewbox| NOM[OpenStreetMap Nominatim]
 
     FE -->|fetch, client-side only| OM[Open-Meteo Forecast API]
@@ -34,15 +35,15 @@ Note the two independent external-data paths that never meet: the backend's heat
 
 ### 2.1 Application shell
 
-`frontend/src/App.jsx` is the entire routing layer — there is **no `react-router-dom`**. A single `activePage` string in `useState` selects which page component renders inside `<main>`. Navigation items live in `components/Navbar.jsx`:
+`frontend/src/App.jsx` is the entire routing layer — there is **no `react-router-dom`**. The page lives in the URL hash (`#/routes`, `#/map`, ...), so refresh, Back and shared links work; a `hashchange` listener sets the `activePage` state that selects which page component renders inside `<main>`. Navigation items live in `components/Navbar.jsx`:
 
 | Nav id | Label | Renders |
 |---|---|---|
 | `home` | Home | `pages/HomePage.jsx` |
 | `map` | Heat Map | `pages/HeatMapPage.jsx` |
 | `routes` | Cool Routes | `pages/RoutesPage.jsx` |
-| `analytics` / `risk` / `simulator` | Analytics & Risk | `pages/AnalyticsPage.jsx` (tabbed: `trends` / `risk` / `simulator`) |
-| `insights` / `recommendations` / `learn` / `about` | Insights & Guide | `pages/InsightsPage.jsx` (tabbed: wraps `RecommendationsPage`, `LearnPage`, `AboutPage`) |
+| `analytics` / `risk` / `simulator` | Analytics | `pages/AnalyticsPage.jsx` (tabbed: `trends` / `risk` / `simulator`) |
+| `insights` / `recommendations` / `guide` / `learn` / `about` | Actions & Guide | `pages/InsightsPage.jsx` (two tabs: Cooling actions = `RecommendationsPage`; Guide = `LearnPage` + `AboutPage`) |
 
 `App.jsx` also owns global state shared across pages: `currentLocation`, `heatPoints`, `theme` (persisted to `localStorage`, applied via `data-theme` attribute consumed by CSS custom properties in `App.css`).
 
@@ -55,10 +56,11 @@ Note the two independent external-data paths that never meet: the backend's heat
 | `components/Footer.jsx` | Footer links, also drives page navigation | — |
 | `components/HeatAlertBanner.jsx` | Conditional banner when current location's risk is high | — |
 | `components/LocationSearch.jsx` | Campus search box: static POI substring match + debounced backend Nominatim search | `campusLocations` (from `config/campus.js`), calls `searchCampusLocations` |
-| `components/InteractiveHeatMap.jsx` | Leaflet map for the Heat Map page; renders a `leaflet.heat` canvas gradient layer, not discrete markers | `HeatGradientLayer`, `getIntensity()` (per-layer 0–1 normalization) |
+| `components/InteractiveHeatMap.jsx` | Leaflet map for the Heat Map page; a click selects the nearest heat data point (no overlay) | `HeatClickHandler` |
+| `components/HourScrubber.jsx` | Time-of-day slider over the selected place's model forecast | — |
+| `components/HeatWave.jsx` | Home page heat-through-the-day curve | — |
 | `components/MapView.jsx` | Leaflet map for the Cool Routes page; renders start/end markers + route polylines | `MapAutoRecenter`, `MapClickHandler` |
 | `components/RouteFinderView.jsx` | Route search UI, route cards, turn-by-turn panel; embeds `MapView` | — |
-| `components/HeatLegend.jsx` | Legend overlay matching the active heat-map layer | — |
 | `components/SelectedLocationPanel.jsx` | Right-hand detail panel on Heat Map page | — |
 | `components/HeatOverviewCard.jsx` | Home page summary card | — |
 | `components/TemperatureChart.jsx`, `HeatTrendChart.jsx`, `HeatProfileChart.jsx`, `AreaComparison.jsx` | Analytics/route chart components (SVG/inline, no external charting library) | — |
@@ -66,7 +68,7 @@ Note the two independent external-data paths that never meet: the backend's heat
 | `components/ExportReportModal.jsx` | Printable heat-report modal (`window.print()` — no PDF library) | `handlePrint` |
 | `components/ThemeToggle.jsx`, `DesktopHeader.jsx` | UI chrome | — |
 | `pages/HomePage.jsx` | Landing page; live Open-Meteo widget via `fetchLiveWeather` | — |
-| `pages/HeatMapPage.jsx` | Hosts `InteractiveHeatMap`, layer switcher, location search | `handleSelectPointFromMap` |
+| `pages/HeatMapPage.jsx` | Hosts `InteractiveHeatMap`, `HourScrubber`, location search | `handleSelectPointFromMap` |
 | `pages/RoutesPage.jsx` | Route state machine: default coords, `calculateRoutes()`, geolocation, presets | `calculateRoutes`, `handleSearch` |
 | `pages/AnalyticsPage.jsx` | Tabs: Trends & Analytics / Risk Vulnerability / ML Simulator | Fetches `getHeatTrend`, `getLocationHeatDetail` |
 | `pages/InsightsPage.jsx` | Tab shell wrapping `RecommendationsPage`, `LearnPage`, `AboutPage` | — |
@@ -124,7 +126,8 @@ flowchart TD
 | `app/api/heat.py` | `/api/location-search`, `/api/predict-heat`, `/api/heatmap`, `/api/location-heat-detail`, `/api/heat-trend`, `/api/recommendations` |
 | `app/api/routes.py` | `/api/recommend-route`, `/api/route-heat` |
 | `app/services/heat_service.py` | DB-backed nearest-point lookup (spatial bounding-box + haversine), spatial-interpolation fallback for un-seeded coordinates, hourly diurnal trend generation, rule-based recommendation ranking |
-| `app/services/route_service.py` | OSRM integration (snap, fetch alternatives), polyline decoding, campus-boundary filtering, per-route point sampling + heat aggregation, three-way route scoring, in-process 5-minute result cache |
+| `app/services/route_service.py` | Campus path graph (loaded once from `data/campus_paths.json`), pin snapping, heat-weighted Dijkstra for three profiles, per-route sampling + heat aggregation, per-edge heat segments, directions |
+| `app/services/weather_service.py` | Current Open-Meteo weather for the campus, cached 10 minutes; `None` when disabled (`LIVE_WEATHER=0`) or unreachable |
 | `app/services/ml_service.py` | Thin class wrapper that loads the model once and forwards `predict()` calls to `ml/predict.py` |
 | `app/services/campus_config.py` | The single source of truth for the SRM KTR bounding box and the `is_within_srm_campus()` / `route_geometry_is_within_srm_campus()` guards used by nearly every endpoint |
 | `app/schemas/schemas.py` | All Pydantic request/response models — see [API_DOCUMENTATION.md](API_DOCUMENTATION.md) |
@@ -161,10 +164,9 @@ flowchart TD
     F --> H[Return heat risk + env breakdown]
     G --> H
 
-    D --> I[route_service: snap start/end via OSRM /nearest]
-    I --> J[Fetch OSRM /route alternatives]
-    J --> K[Keep only alternatives fully inside campus bounds]
-    K --> L[Sample up to 16 pts/route]
+    D --> I[route_service: snap pins to campus path graph]
+    I --> J[Heat-weighted Dijkstra x3]
+    J --> L[Sample up to 16 pts/route]
     L --> M[heat_service.evaluate_coordinate_heat_risk per point]
     M --> N[Aggregate avg/max heat risk per route]
     N --> O[Label Fastest / Coolest / Balanced + recommend]
@@ -185,7 +187,7 @@ flowchart TD
 | Input validation | Pydantic models with field constraints (`ge`/`le` ranges) on every request body/query |
 | Authentication / authorization | Not implemented — every endpoint is public |
 | Rate limiting | Not implemented |
-| API timeouts on outbound calls | All `requests` calls to OSRM/Nominatim use explicit timeouts (8–12s) with limited retries |
+| API timeouts on outbound calls | Nominatim (8s) and Open-Meteo (4s, cached 10 min) calls use explicit timeouts; routing makes no outbound calls |
 | Secrets in frontend bundle | N/A — no API keys are required client-side (Open-Meteo and OSM tiles are keyless public services) |
 | SQL injection | Mitigated — all DB access goes through SQLAlchemy's query builder, no raw string SQL |
 

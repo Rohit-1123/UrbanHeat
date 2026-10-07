@@ -31,7 +31,7 @@ def recommend_route(data: RouteRequest, db: Session = Depends(get_db)):
         )
         return recommendation
     except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate route recommendations: {str(e)}")
 

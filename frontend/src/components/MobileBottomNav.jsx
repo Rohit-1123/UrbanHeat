@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Map, Navigation, Activity } from 'lucide-react';
+import { Home, Map, Navigation, Activity, BookOpen } from 'lucide-react';
 
 // Settings is deliberately not here — it's secondary, reachable from the
 // header's gear icon (Navbar) on every screen width instead.
@@ -7,7 +7,8 @@ const NAV_ITEMS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'map', label: 'Map', icon: Map },
   { id: 'routes', label: 'Routes', icon: Navigation },
-  { id: 'analytics', label: 'Insights', icon: Activity },
+  { id: 'analytics', label: 'Analytics', icon: Activity },
+  { id: 'insights', label: 'Guide', icon: BookOpen },
 ];
 
 // Fixed bottom navigation shown only on mobile widths (see .mobile-bottom-nav
@@ -16,6 +17,7 @@ const MobileBottomNav = ({ activePage, onNavigate }) => {
   const isActive = (id) => {
     if (activePage === id) return true;
     if (id === 'analytics' && (activePage === 'risk' || activePage === 'simulator')) return true;
+    if (id === 'insights' && ['recommendations', 'guide', 'learn', 'about'].includes(activePage)) return true;
     return false;
   };
 

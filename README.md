@@ -10,15 +10,16 @@ Full technical documentation lives in [`docs/`](docs/) and is linked throughout 
 
 ## 1. What This Is
 
-Conventional navigation apps optimize only for distance and travel time. UrbanHeat adds a third factor — **predicted heat exposure** — using a trained machine-learning model, real OSRM-derived walking routes, and a spatial heat dataset, all scoped to the SRM KTR campus boundary.
+Conventional navigation apps optimize only for distance and travel time. UrbanHeat adds a third factor — **predicted heat exposure** — using a trained machine-learning model, live weather, real campus walking paths from OpenStreetMap, and a spatial heat dataset, all scoped to the SRM KTR campus boundary.
 
 It is **not** a general city-wide router: every endpoint hard-rejects coordinates outside the SRM KTR bounding box.
 
 ## 2. Core Features
 
-- **Interactive Leaflet heat map** (OpenStreetMap tiles) with 5 selectable layers — heat intensity, surface temperature, vegetation, built-up density, heat risk.
+- **Campus heat map** (OpenStreetMap tiles): tap anywhere to inspect that spot, and scrub its heat through the day with a time slider.
 - **Trained ML heat-risk model** — a `RandomForestRegressor` predicting a 0–100 heat-risk score from temperature, humidity, UV index, vegetation index, building density, and shade score, with an analytical-formula fallback if the model can't load.
-- **Real walking routes via OSRM** — start/end pins snapped to the actual OSM footpath graph, with alternatives filtered to those that stay fully inside campus.
+- **Heat-aware walking routes, computed in-process.** Heat-weighted Dijkstra over the campus path network from OpenStreetMap (committed as `backend/data/campus_paths.json`). Tap the map or drag pins to set start and end; the chosen route is coloured by heat. No external routing service.
+- **Live weather in the model.** The backend feeds current Open-Meteo temperature, humidity and UV into the heat-risk model for location detail (cached 10 minutes, falls back to the dataset if unreachable).
 - **Three-way route comparison** — Fastest / Coolest / Balanced, scored as `0.50×heat + 0.25×distance + 0.25×duration` (normalized per-request), with Coolest recommended by default.
 - **Campus location search** — a curated 30-place POI list plus a backend-proxied, campus-bounded OpenStreetMap Nominatim search.
 - **ML "what-if" simulator** — four sliders call the live prediction endpoint in real time.
@@ -33,11 +34,11 @@ It is **not** a general city-wide router: every endpoint hard-rejects coordinate
 
 | Layer | Stack |
 |---|---|
-| Frontend | React 18, Vite 6, Leaflet / react-leaflet / `leaflet.heat`, plain CSS design tokens, axios |
+| Frontend | React 18, Vite 6, Leaflet / react-leaflet, plain CSS design tokens (`App.css` + `theme.css`), axios |
 | Backend | Python 3.13, FastAPI, Pydantic v2, SQLAlchemy 2.0 |
 | Database | PostgreSQL if reachable, automatic local SQLite fallback (`backend/urban_heat.db`) |
 | ML | scikit-learn `RandomForestRegressor`, trained on a synthetic formula-generated dataset |
-| Routing | Public OSRM `routed-foot` service (walking profile) |
+| Routing | In-process Dijkstra (stdlib `heapq`) over the OSM campus path graph |
 | Geocoding | OpenStreetMap Nominatim, backend-proxied and campus-bounded |
 | Weather | Open-Meteo (frontend-only) |
 
@@ -51,7 +52,8 @@ flowchart TD
     FE -->|axios REST| BE[FastAPI Backend]
     BE --> DB[(heat_data\nPostgreSQL or SQLite)]
     BE --> ML[RandomForest\nheat_risk_model.joblib]
-    BE -->|HTTP| OSRM[Public OSRM routed-foot]
+    BE --> G[(campus_paths.json\nOSM path graph)]
+    BE -->|HTTP, cached| OMB[Open-Meteo]
     BE -->|HTTP| NOM[OSM Nominatim]
     FE -->|client-side only| OM[Open-Meteo]
 ```
@@ -177,6 +179,8 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
 `$PORT` is supplied by Render at runtime — never hardcode a port. `render.yaml` also points Render's health check at `GET /health`.
 
+Build command (also in `render.yaml`): `pip install -r requirements.txt && python ml/train_model.py && python scripts/seed_heat_data.py`. The trained model (`*.joblib`) and the SQLite file (`*.db`) are gitignored, so they must be built on Render. Without this step the deployed heat map is empty and every prediction falls back to the analytical formula.
+
 **Database note:** if no `POSTGRES_*` variables are set on Render, the backend automatically falls back to a local SQLite file (see [docs/ARCHITECTURE.md §3.2](docs/ARCHITECTURE.md#32-database-engine-selection-verified-behavior)). Render's filesystem for a web service is ephemeral — a SQLite file there will be reset on every deploy/restart. For persistent heat data in production, provision a real PostgreSQL database (e.g. Render's managed Postgres, or any reachable Postgres instance) and set the `POSTGRES_DB/USER/PASSWORD/HOST/PORT` variables accordingly.
 
 ### 7.3 Deployment order & verification checklist
@@ -211,10 +215,10 @@ Full request/response schemas and verified live examples: [docs/API_DOCUMENTATIO
 Real algorithm (verified from source, **not** a generic "shortest + 20% detour" model):
 
 ```text
-Snap start/end → OSRM route alternatives → keep only alternatives
-whose full geometry stays inside the campus boundary → sample up to
-16 points/route → score heat risk per point (ML model) → aggregate
-per route → label Fastest / Coolest / Balanced → recommend Coolest
+Snap pins to the campus path graph → Dijkstra three times with edge
+cost = length × (1 + alpha × heat/100), alpha = 0 / 1.5 / 4 →
+sample up to 16 points/route → score heat risk per point → aggregate
+→ Fastest / Balanced / Coolest → recommend Coolest if it saves heat
 ```
 
 Balanced route score: `0.50 × (avg heat risk / 100) + 0.25 × (distance / max distance) + 0.25 × (duration / max duration)`, normalized against the candidates in that request only.
@@ -236,15 +240,15 @@ Full step-by-step derivation, the exact heat formula, and a worked example from 
 
 - Heat data is formula-generated/synthetic, not satellite- or sensor-derived.
 - The committed `urban_heat.db` predates the current seed script and only sparsely covers the campus box — re-run `scripts/seed_heat_data.py` to regenerate a dense, in-bounds dataset.
-- Routing depends on a public, unauthenticated OSRM server with no SLA — this project deliberately shows an explicit error state rather than a fake route when it's unavailable.
+- OpenStreetMap maps only ~170 campus ways, so many trips have a single sensible path and the three route options coincide (the UI says so). Re-run `scripts/build_campus_graph.py` as OSM coverage improves.
 - No authentication or rate limiting on any endpoint.
-- A basic pytest contract-test suite exists (`backend/tests/test_api_contract.py`), covering validation and response-shape checks for every endpoint; it does not (and should not) assert against live third-party (OSRM/Nominatim) responses.
+- A basic pytest contract-test suite exists (`backend/tests/test_api_contract.py`), covering validation and response-shape checks for every endpoint; routing is tested end to end against the committed graph; live third-party responses (Nominatim, Open-Meteo) are not asserted (`LIVE_WEATHER=0` in tests).
 - SQLite is not persistent on Render's ephemeral filesystem — use a real PostgreSQL instance for production data durability (see §7.2).
 
 ## 12. Future Enhancements
 
 - Real satellite NDVI / land-surface-temperature data in place of the anchor-distance formula.
-- Self-hosted OSRM instance for routing reliability.
+- Map campus footpaths and covered walkways in OpenStreetMap so the router has more cool alternatives.
 - Air quality and safety-aware routing.
 - Broader automated test coverage (integration tests against a real/managed Postgres, frontend component tests).
 - Unify the backend (Python) and frontend (JS) heat-risk formulas into one source of truth.

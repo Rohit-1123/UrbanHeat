@@ -1,25 +1,14 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import {
   MapContainer,
   TileLayer,
   CircleMarker,
-  Rectangle,
   useMap,
   useMapEvents
 } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet.heat';
 import { Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import { SRM_CAMPUS } from '../config/campus';
-
-// Heat-severity spectrum, matching the app's design tokens in index.css
-// (--cool-teal / --heat-moderate / --hot-amber / --hot-red).
-const HEAT_GRADIENT = {
-  0.0: '#3FA796',
-  0.4: '#D9A441',
-  0.7: '#D9722C',
-  1.0: '#C6432E'
-};
 
 // Fix Leaflet marker icon asset paths
 delete L.Icon.Default.prototype._getIconUrl;
@@ -108,39 +97,7 @@ const CustomMapControls = ({ onResetView, onUseMyLocation }) => {
   );
 };
 
-// Renders the spatial heat data as one smooth continuous gradient (like a
-// weather radar overlay) instead of hundreds of discrete overlapping circles.
-const HeatGradientLayer = ({ points, getIntensity }) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!points || points.length === 0) return;
-
-    const heatPoints = points.map((pt) => [
-      pt.latitude ?? pt.lat,
-      pt.longitude ?? pt.lon,
-      getIntensity(pt)
-    ]);
-
-    const heatLayer = L.heatLayer(heatPoints, {
-      radius: 32,
-      blur: 24,
-      maxZoom: 17,
-      max: 1.0,
-      gradient: HEAT_GRADIENT
-    }).addTo(map);
-
-    return () => {
-      map.removeLayer(heatLayer);
-    };
-  }, [points, getIntensity, map]);
-
-  return null;
-};
-
-// Since the heat data is now a canvas gradient with no per-point DOM elements
-// to attach click handlers to, clicking the map instead finds and selects the
-// nearest underlying data point.
+// Clicking anywhere on campus selects the nearest heat data point.
 const HeatClickHandler = ({ points, onSelectPoint }) => {
   useMapEvents({
     click(e) {
@@ -166,7 +123,6 @@ const InteractiveHeatMap = ({
   points = [],
   centerLocation = null,
   selectedLocation = null,
-  activeLayer = 'heat_intensity',
   onSelectPoint = null,
   onUseMyLocation = null,
   theme = 'light'
@@ -180,32 +136,6 @@ const InteractiveHeatMap = ({
   const handleReset = () => {
     setResetTrigger((prev) => prev + 1);
   };
-
-  // Normalizes each point to a 0-1 intensity for the active layer, driving
-  // the heat gradient's color at that spot (0 = coolest end of HEAT_GRADIENT,
-  // 1 = hottest end).
-  const getIntensity = useCallback((pt) => {
-    if (activeLayer === 'surface_temp') {
-      const sTemp = pt.surfaceTemp ?? (pt.temperature ? pt.temperature + 4.5 : 36);
-      return Math.min(Math.max((sTemp - 28) / (42 - 28), 0), 1);
-    }
-
-    if (activeLayer === 'vegetation') {
-      // Sparse canopy reads as "hot" on this layer, so invert vegetation ratio.
-      const veg = pt.vegetation_index ?? 0.35;
-      return Math.min(Math.max(1 - veg, 0), 1);
-    }
-
-    if (activeLayer === 'built_up') {
-      const density = pt.building_density ?? 0.75;
-      return Math.min(Math.max(density, 0), 1);
-    }
-
-    // 'heat_risk' and the default 'heat_intensity' layers both key off the
-    // 0-100 heat risk score.
-    const score = pt.heat_risk ?? pt.heatRiskScore ?? 50;
-    return Math.min(Math.max(score / 100, 0), 1);
-  }, [activeLayer]);
 
   // CartoDB's basemap tiles now require an API key (they render an
   // "API KEY REQUIRED" watermark without one), so use the same free,
@@ -233,11 +163,6 @@ const InteractiveHeatMap = ({
           maxZoom={19}
         />
 
-        <Rectangle
-          bounds={SRM_CAMPUS.bounds}
-          pathOptions={{ color: '#10b981', weight: 2, dashArray: '6 6', fillColor: '#10b981', fillOpacity: 0.04 }}
-        />
-
         {/* Dynamic Navigation & Zoom Controls */}
         <CustomMapControls
           onResetView={handleReset}
@@ -250,8 +175,6 @@ const InteractiveHeatMap = ({
           resetTrigger={resetTrigger}
         />
 
-        {/* Smooth Spatial Heat Gradient (weather-radar style, no discrete points) */}
-        <HeatGradientLayer points={points} getIntensity={getIntensity} />
         <HeatClickHandler points={points} onSelectPoint={onSelectPoint} />
 
         {/* Prominent Highlighting Ring for Selected Location */}
@@ -265,7 +188,7 @@ const InteractiveHeatMap = ({
             pathOptions={{
               fillColor: 'transparent',
               fillOpacity: 0,
-              color: '#147D78',
+              color: '#2a63c9',
               weight: 3,
               dashArray: '3, 3',
               opacity: 0.95

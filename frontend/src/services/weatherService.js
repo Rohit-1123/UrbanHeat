@@ -1,8 +1,7 @@
-import { estimateMicroclimateForCoords, calculateHeatRisk } from '../utils/riskCalculator';
-
 /**
  * Fetches real-time weather and meteorological data from the free Open-Meteo API.
- * Falls back cleanly to calibrated local microclimate equations if network fails.
+ * Weather only: the heat-risk score always comes from the backend. On failure
+ * returns { isLive: false } with no values, never invented readings.
  */
 export async function fetchLiveWeather(lat, lon) {
   try {
@@ -16,16 +15,7 @@ export async function fetchLiveWeather(lat, lon) {
     const hourly = data.hourly;
 
     const currentHourIndex = new Date().getHours();
-    const currentUV = hourly?.uv_index?.[currentHourIndex] ?? 7.5;
-
-    // Calculate microclimate risk score with live inputs
-    const microclimate = estimateMicroclimateForCoords(lat, lon);
-    const risk = calculateHeatRisk({
-      temperature: current.temperature_2m,
-      humidity: current.relative_humidity_2m,
-      vegetationIndex: microclimate.vegetationIndex,
-      builtUpDensity: microclimate.builtUpDensity
-    });
+    const currentUV = hourly?.uv_index?.[currentHourIndex];
 
     // Format next 24 hours of forecast
     const forecast24h = [];
@@ -49,33 +39,12 @@ export async function fetchLiveWeather(lat, lon) {
       feelsLike: Math.round(current.apparent_temperature * 10) / 10,
       humidity: Math.round(current.relative_humidity_2m),
       windSpeed: Math.round(current.wind_speed_10m * 10) / 10,
-      uvIndex: Math.round(currentUV * 10) / 10,
-      heatRiskScore: risk.score,
-      riskLevel: risk.riskLevel,
+      uvIndex: Number.isFinite(currentUV) ? Math.round(currentUV * 10) / 10 : undefined,
       forecast24h,
       lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
   } catch (err) {
-    console.warn('Open-Meteo API unreachable, using calibrated local microclimate model:', err);
-    const estimated = estimateMicroclimateForCoords(lat, lon);
-    return {
-      isLive: false,
-      source: 'Calibrated Microclimate Engine',
-      temperature: estimated.temperature,
-      feelsLike: estimated.feelsLike,
-      humidity: estimated.humidity,
-      windSpeed: 8.5,
-      uvIndex: estimated.uvIndex,
-      heatRiskScore: estimated.heatRiskScore,
-      riskLevel: estimated.riskLevel,
-      forecast24h: [
-        { time: '09:00 AM', temp: estimated.temperature - 3, feelsLike: estimated.feelsLike - 4, uv: 5.5 },
-        { time: '12:00 PM', temp: estimated.temperature + 2, feelsLike: estimated.feelsLike + 3, uv: 9.2 },
-        { time: '03:00 PM', temp: estimated.temperature + 1, feelsLike: estimated.feelsLike + 2, uv: 7.8 },
-        { time: '06:00 PM', temp: estimated.temperature - 2, feelsLike: estimated.feelsLike - 3, uv: 2.1 },
-        { time: '09:00 PM', temp: estimated.temperature - 5, feelsLike: estimated.feelsLike - 6, uv: 0 },
-      ],
-      lastUpdated: 'Just now'
-    };
+    console.warn('Open-Meteo API unreachable:', err);
+    return { isLive: false };
   }
 }

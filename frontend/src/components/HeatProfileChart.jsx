@@ -1,17 +1,10 @@
 import React from 'react';
 
-const HeatProfileChart = ({ profile, color = '#10b981', height = 100 }) => {
-  if (!profile || profile.length < 2) {
-    profile = [
-      { position: 0, score: 20 },
-      { position: 25, score: 35 },
-      { position: 50, score: 65 },
-      { position: 75, score: 40 },
-      { position: 100, score: 75 }
-    ];
-  }
+const HeatProfileChart = ({ profile, color = '#10b981', height = 100, width = 320 }) => {
+  const reactId = React.useId();
+  // No invented placeholder curve: nothing to draw without real data.
+  if (!profile || profile.length < 2) return null;
 
-  const width = 320;
   const padding = 16;
   const chartWidth = width - padding * 2;
   const chartHeight = height - padding * 2;
@@ -36,7 +29,6 @@ const HeatProfileChart = ({ profile, color = '#10b981', height = 100 }) => {
 
   // Area fill path string
   const areaD = `${pathD} L ${points[points.length - 1].x} ${height - padding} L ${points[0].x} ${height - padding} Z`;
-  const reactId = React.useId();
   const gradientId = `lightHeatGrad-${reactId.replace(/:/g, '')}`;
 
   return (
@@ -50,25 +42,24 @@ const HeatProfileChart = ({ profile, color = '#10b981', height = 100 }) => {
         </defs>
 
         {/* Grid lines */}
-        <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#e2e8f0" strokeDasharray="3 3" />
-        <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#e2e8f0" strokeDasharray="3 3" />
-        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#cbd5e1" />
+        <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="currentColor" strokeOpacity="0.1" strokeDasharray="2 6" />
+        <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="currentColor" strokeOpacity="0.1" strokeDasharray="2 6" />
+        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="currentColor" strokeOpacity="0.18" />
 
         {/* Area fill */}
         <path d={areaD} fill={`url(#${gradientId})`} />
 
         {/* Curve stroke */}
-        <path d={pathD} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" />
+        <path d={pathD} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
 
         {/* Markers */}
         {points.map((pt, idx) => (
-          <circle key={idx} cx={pt.x} cy={pt.y} r="3.5" fill="#ffffff" stroke={color} strokeWidth="2" />
+          <circle key={idx} cx={pt.x} cy={pt.y} r="2.5" fill={color} />
         ))}
       </svg>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b', marginTop: '-8px' }}>
-        <span>Start Point</span>
-        <span>Midpoint</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '-4px' }}>
+        <span>Start</span>
         <span>Destination</span>
       </div>
     </div>

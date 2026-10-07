@@ -1,101 +1,76 @@
-import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Rectangle, useMap, useMapEvents } from 'react-leaflet';
+import React, { useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Star } from 'lucide-react';
 import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
+import { getRiskColor } from '../utils/riskCalculator';
 
-// Fix Leaflet default marker icons in React Vite bundle
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+// Minimal pins drawn in CSS (theme.css .route-pin) instead of remote PNG markers.
+const pinIcon = (kind) => L.divIcon({
+  className: '',
+  html: `<span class="route-pin route-pin-${kind}"><i></i></span>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
 });
+const START_ICON = pinIcon('start');
+const END_ICON = pinIcon('end');
 
-const startIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const endIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const MapAutoRecenter = ({ start, end, routes }) => {
+const FitToRoute = ({ start, end, geometry }) => {
   const map = useMap();
-
   useEffect(() => {
-    const points = [];
-    if (start && start.lat && start.lon && isWithinSrmCampus(start.lat, start.lon)) points.push([start.lat, start.lon]);
-    if (end && end.lat && end.lon && isWithinSrmCampus(end.lat, end.lon)) points.push([end.lat, end.lon]);
-
-    const cPts = routes?.coolest_route?.geometry || routes?.coolest_route?.coordinates;
-    const bPts = routes?.balanced_route?.geometry || routes?.balanced_route?.coordinates;
-    const fPts = routes?.fastest_route?.geometry || routes?.fastest_route?.coordinates;
-
-    if (cPts) cPts.filter((pt) => isWithinSrmCampus(pt[0], pt[1])).forEach((pt) => points.push(pt));
-    if (bPts) bPts.filter((pt) => isWithinSrmCampus(pt[0], pt[1])).forEach((pt) => points.push(pt));
-    if (fPts) fPts.filter((pt) => isWithinSrmCampus(pt[0], pt[1])).forEach((pt) => points.push(pt));
-
-    if (points.length > 0) {
-      const bounds = L.latLngBounds(points);
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
-    }
-  }, [start, end, routes, map]);
-
+    const points = [...(geometry || [])];
+    if (start) points.push([start.lat, start.lon]);
+    if (end) points.push([end.lat, end.lon]);
+    if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 17 });
+  }, [start, end, geometry, map]);
   return null;
 };
 
 const MapClickHandler = ({ onMapClick, onOutsideCampusClick }) => {
   useMapEvents({
     click(e) {
-      if (isWithinSrmCampus(e.latlng.lat, e.latlng.lng) && onMapClick) {
-        onMapClick({ lat: e.latlng.lat, lon: e.latlng.lng });
-      } else if (onOutsideCampusClick) {
-        onOutsideCampusClick();
-      }
+      if (isWithinSrmCampus(e.latlng.lat, e.latlng.lng)) onMapClick?.({ lat: e.latlng.lat, lon: e.latlng.lng });
+      else onOutsideCampusClick?.();
     }
   });
   return null;
 };
 
-const getHeatColor = (score) => {
-  if (score <= 25) return '#10b981';
-  if (score <= 50) return '#eab308';
-  if (score <= 75) return '#f97316';
-  return '#ef4444';
-};
+const ROUTE_KEYS = { coolest: 'coolest_route', balanced: 'balanced_route', fastest: 'fastest_route' };
 
 const MapView = ({
-  heatmapPoints,
   startCoords,
   endCoords,
   routes,
   selectedRouteType = 'coolest',
   onMapClick,
-  onOutsideCampusClick
+  onOutsideCampusClick,
+  onPinMove,
 }) => {
-  const defaultCenter = SRM_CAMPUS.center;
+  const active = routes?.[ROUTE_KEYS[selectedRouteType]];
+  const others = Object.entries(ROUTE_KEYS)
+    .filter(([type]) => type !== selectedRouteType)
+    .map(([, key]) => routes?.[key]?.geometry)
+    .filter((g) => g?.length);
 
-  const coolestPolyline = routes?.coolest_route?.geometry || routes?.coolest_route?.coordinates || [];
+  // Refit only when the active path itself changes, not on every re-render.
+  const activeGeometry = useMemo(() => active?.geometry, [active]);
+
+  const dragHandlers = (which) => ({
+    dragend: (e) => {
+      const { lat, lng } = e.target.getLatLng();
+      if (isWithinSrmCampus(lat, lng)) onPinMove?.(which, { lat, lon: lng });
+      else onOutsideCampusClick?.();
+    },
+  });
 
   return (
     <div className="desktop-map-center-container">
       <MapContainer
-        center={defaultCenter}
-        zoom={13}
+        center={SRM_CAMPUS.center}
+        zoom={16}
         className="leaflet-map-wrapper"
-        scrollWheelZoom={true}
+        scrollWheelZoom
         maxBounds={SRM_CAMPUS.bounds}
         maxBoundsViscosity={1.0}
       >
@@ -104,94 +79,32 @@ const MapView = ({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <Rectangle
-          bounds={SRM_CAMPUS.bounds}
-          pathOptions={{ color: '#10b981', weight: 2, dashArray: '6 6', fillColor: '#10b981', fillOpacity: 0.04 }}
-        />
+        <FitToRoute start={startCoords} end={endCoords} geometry={activeGeometry} />
+        <MapClickHandler onMapClick={onMapClick} onOutsideCampusClick={onOutsideCampusClick} />
 
-        <MapAutoRecenter start={startCoords} end={endCoords} routes={routes} />
-        {(onMapClick || onOutsideCampusClick) && (
-          <MapClickHandler onMapClick={onMapClick} onOutsideCampusClick={onOutsideCampusClick} />
-        )}
-
-        {/* Spatial Heat Points Overlay */}
-        {heatmapPoints && heatmapPoints.map((pt, idx) => (
-          <CircleMarker
-            key={idx}
-            center={[pt.latitude, pt.longitude]}
-            radius={8}
-            pathOptions={{
-              fillColor: getHeatColor(pt.heat_risk),
-              fillOpacity: 0.6,
-              color: getHeatColor(pt.heat_risk),
-              weight: 1.5,
-              opacity: 0.95
-            }}
-          >
-            <Popup>
-              <div style={{ padding: '2px', fontFamily: 'sans-serif' }}>
-                <strong style={{ color: getHeatColor(pt.heat_risk) }}>
-                  Heat Risk Score: {pt.heat_risk} / 100 ({pt.risk_level})
-                </strong>
-                <hr style={{ margin: '4px 0', borderColor: '#e2e8f0' }} />
-                <div style={{ fontSize: '0.78rem', color: '#334155' }}>
-                  <div>Temp: <strong>{pt.temperature}°C</strong> | Humidity: <strong>{pt.humidity}%</strong></div>
-                  <div>UV Index: <strong>{pt.uv_index}</strong></div>
-                  <div>NDVI Vegetation: <strong>{pt.vegetation_index}</strong></div>
-                  <div>Building Density: <strong>{pt.building_density}</strong></div>
-                  <div>Shade Score: <strong>{pt.shade_score}</strong></div>
-                </div>
-              </div>
-            </Popup>
-          </CircleMarker>
+        {/* Alternatives: faint, so the chosen route reads first. */}
+        {others.map((geometry, i) => (
+          <Polyline key={i} positions={geometry} pathOptions={{ color: '#5b6f8c', weight: 3, opacity: 0.35, dashArray: '2 6' }} />
         ))}
 
-        {/* Verified Coolest Route Polyline */}
-        {coolestPolyline.length > 0 && (
-          <Polyline
-            positions={coolestPolyline}
-            pathOptions={{
-              color: '#10b981',
-              weight: 8,
-              opacity: 1.0
-            }}
-          >
-            <Popup>
-              <strong style={{ color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                Coolest Route (Shaded Canopy) <Star size={13} fill="#10b981" strokeWidth={0} /> Recommended
-              </strong><br />
-              Distance: {routes.coolest_route.distance_km} km<br />
-              Duration: {routes.coolest_route.duration_minutes} min<br />
-              Avg Heat Risk: {routes.coolest_route.average_heat_risk}/100<br />
-              Shaded Area: {routes.coolest_route.shaded_area_percentage}%
-            </Popup>
-          </Polyline>
-        )}
+        {/* Chosen route, coloured edge by edge by predicted heat. */}
+        {active?.heat_segments?.length
+          ? active.heat_segments.map((seg, i) => (
+            <Polyline
+              key={`${selectedRouteType}-${i}`}
+              positions={seg.coords}
+              pathOptions={{ color: getRiskColor(seg.heat_risk), weight: 6, opacity: 0.95, lineCap: 'round' }}
+            />
+          ))
+          : active?.geometry?.length > 0 && (
+            <Polyline positions={active.geometry} pathOptions={{ color: '#2a63c9', weight: 5 }} />
+          )}
 
-        {/* Start Location Marker */}
-        {startCoords && isWithinSrmCampus(startCoords.lat, startCoords.lon) && (
-          <Marker position={[startCoords.lat, startCoords.lon]} icon={startIcon}>
-            <Popup>
-              <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
-                Start Location
-              </strong><br />
-              Lat: {startCoords.lat}, Lon: {startCoords.lon}
-            </Popup>
-          </Marker>
+        {startCoords && (
+          <Marker position={[startCoords.lat, startCoords.lon]} icon={START_ICON} draggable eventHandlers={dragHandlers('start')} />
         )}
-
-        {/* Destination Marker */}
-        {endCoords && isWithinSrmCampus(endCoords.lat, endCoords.lon) && (
-          <Marker position={[endCoords.lat, endCoords.lon]} icon={endIcon}>
-            <Popup>
-              <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-                Destination
-              </strong><br />
-              Lat: {endCoords.lat}, Lon: {endCoords.lon}
-            </Popup>
-          </Marker>
+        {endCoords && (
+          <Marker position={[endCoords.lat, endCoords.lon]} icon={END_ICON} draggable eventHandlers={dragHandlers('end')} />
         )}
       </MapContainer>
     </div>

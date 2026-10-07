@@ -147,24 +147,29 @@ Returns seeded `heat_data` rows, optionally bounding-box filtered (always clampe
   "risk_level": "Moderate Heat Risk",
   "temperature": 34.4,
   "humidity": 66.9,
-  "uv_index_label": "High (8.0)",
+  "uv_index_label": "Very High (8.0)",
   "vegetation_cover": "72%",
   "building_density": "High (Dense Urban)",
-  "surface_type": "Concrete / Asphalt Pavement",
+  "surface_type": "Mostly paved / built-up",
   "warning_message": "Heat conditions are manageable. Maintain normal hydration.",
   "forecast": [
     {"time": "Now", "temp": 34, "heat_risk": 48, "risk_level": "Moderate"},
-    {"time": "1 PM", "temp": 36, "heat_risk": 52, "risk_level": "High"}
+    {"time": "6 AM", "temp": 27, "heat_risk": 30, "risk_level": "Moderate"}
   ],
   "recommendations": [
     {"title": "Find Shade", "description": "Choose routes with more trees and canopy coverage.", "icon": "tree"}
-  ]
+  ],
+  "environment": {"temperature": 34.4, "humidity": 66.9, "uv_index": 8.0, "vegetation_index": 0.72, "building_density": 0.65, "shade_score": 0.5}
 }
 ```
 
-**Note on `forecast`:** this is a **fixed offset curve applied to the current predicted risk** (`env["temperature"] ± N`, `score ± N` at fixed hour labels — see `app/api/heat.py:124-131`), not an actual time-series weather forecast or a second model call per hour. `recommendations` here is a **static** 3-item list, unlike the endpoint below.
+**Note on `forecast`:** `"Now"` followed by the same 6-point model-driven diurnal curve that `/api/heat-trend` returns (the ML model re-run per hour). It is not a real weather forecast. `recommendations` here is a **static** 3-item list, unlike the endpoint below.
 
-**Note on `surface_type`:** always the literal string `"Concrete / Asphalt Pavement"` — this field is not actually derived from any surface-classification data; it is currently a hardcoded placeholder value in `app/api/heat.py`.
+**Note on `uv_index_label` / `surface_type`:** `uv_index_label` uses the WHO UV bands. `surface_type` is a coarse label comparing the point's building density with its vegetation index, not real surface-classification data.
+
+**Note on `environment`:** the raw numeric inputs (0-1 ratios, °C, %) behind the display strings above. The frontend uses these instead of re-estimating them.
+
+**Note on `live_weather` / `observed_at`:** when Open-Meteo is reachable (cached 10 minutes, `LIVE_WEATHER=0` disables it), the current campus temperature, humidity and UV replace the dataset values and the score is re-predicted with the location's own vegetation, building density and shade. `live_weather` is then `true` and `observed_at` is the observation time; otherwise the dataset is used and `observed_at` is `null`.
 
 **Errors:** `400` if outside campus; `500` on unexpected error.
 
@@ -172,7 +177,7 @@ Returns seeded `heat_data` rows, optionally bounding-box filtered (always clampe
 
 ## `GET /api/heat-trend`
 
-Genuinely re-runs the ML model per hour (unlike the fixed-offset `forecast` above) — see [DATA_AND_ENVIRONMENTAL_ANALYSIS.md](DATA_AND_ENVIRONMENTAL_ANALYSIS.md) for the diurnal-curve formula it feeds the model.
+Re-runs the ML model per hour (the same curve `forecast` above embeds) — see [DATA_AND_ENVIRONMENTAL_ANALYSIS.md](DATA_AND_ENVIRONMENTAL_ANALYSIS.md) for the diurnal-curve formula it feeds the model.
 
 | Param | Type | Required |
 |---|---|---|
@@ -268,21 +273,21 @@ Full algorithm documented in [ROUTE_OPTIMIZATION.md](ROUTE_OPTIMIZATION.md). Sum
     "start_snap_distance_m": 12.7,
     "end_snap_distance_m": 9.0,
     "pins_snapped": true,
-    "summary": "Routes with more trees and greenery reduce heat exposure by up to 0 points."
+    "summary": "Every mapped path between these points has similar heat exposure, so the fastest one is also the coolest."
   }
 }
 ```
 
 **Errors**
 - `400` — identical start/end, or either point outside campus
-- `503` — no viable campus-bound OSRM route found (see [ROUTE_OPTIMIZATION.md §2.4](ROUTE_OPTIMIZATION.md#24-campus-boundary-filtering--the-real-constraint)), or the OSRM/snap request itself failed
+- `422` — a pin is more than 250 m from any mapped campus path, both pins snap to the same node, or the points are not connected (see [ROUTE_OPTIMIZATION.md](ROUTE_OPTIMIZATION.md))
 - `500` — unexpected server error
 
 ---
 
 ## `POST /api/route-heat`
 
-Ad-hoc heat analysis for an arbitrary coordinate path (no OSRM call).
+Ad-hoc heat analysis for an arbitrary coordinate path (no routing involved).
 
 **Request body** (`RouteHeatDetailRequest`)
 ```json
@@ -299,7 +304,8 @@ Ad-hoc heat analysis for an arbitrary coordinate path (no OSRM call).
 
 | Service | Called from | Auth required | Notes |
 |---|---|---|---|
-| OSRM `routing.openstreetmap.de/routed-foot` | `route_service.py` | No (public) | `/nearest` and `/route` |
+| Open-Meteo `api.open-meteo.com/v1/forecast` | `weather_service.py` | No | Current temperature, humidity, UV; cached 10 min |
+| Overpass API (OpenStreetMap) | `scripts/build_campus_graph.py` only | No | One-off download of campus paths; not called at runtime |
 | OpenStreetMap Nominatim | `api/heat.py::search_campus_locations` | No (public, rate-limited by usage policy) | Bounded viewbox + campus post-filter |
 
 No backend call is ever made to Open-Meteo or Mapbox.

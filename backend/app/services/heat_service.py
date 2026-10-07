@@ -4,6 +4,18 @@ from typing import List, Optional, Tuple, Dict, Any
 from sqlalchemy.orm import Session
 from app.database.models import HeatData
 from app.services.ml_service import ml_service
+from ml.predict import predict_heat_risk_many
+
+# Typical Chennai summer day: (hour label, temp offset from the location's
+# base temperature, UV index at that hour).
+DIURNAL_CURVE = [
+    ("6 AM", -7.0, 2.0),
+    ("9 AM", -3.0, 6.0),
+    ("12 PM", 1.5, 9.5),
+    ("3 PM", 2.5, 8.5),
+    ("6 PM", -1.0, 3.5),
+    ("9 PM", -4.5, 0.0),
+]
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculates distance between two coordinates in kilometers."""
@@ -119,31 +131,16 @@ class HeatService:
         building_density = env["building_density"]
         shade_score = env["shade_score"]
 
-        # (hour label, temp offset from base, uv index for that hour)
-        diurnal_curve = [
-            ("6 AM", -7.0, 2.0),
-            ("9 AM", -3.0, 6.0),
-            ("12 PM", 1.5, 9.5),
-            ("3 PM", 2.5, 8.5),
-            ("6 PM", -1.0, 3.5),
-            ("9 PM", -4.5, 0.0),
+        temps = [round(base_temp + offset, 1) for _, offset, _ in DIURNAL_CURVE]
+        predictions = predict_heat_risk_many([
+            {"temperature": t, "humidity": env["humidity"], "uv_index": uv,
+             "vegetation_index": vegetation_index, "building_density": building_density, "shade_score": shade_score}
+            for t, (_, _, uv) in zip(temps, DIURNAL_CURVE)
+        ])
+        return [
+            {"hour": label, "temperature": t, "heat_risk": round(score, 1), "risk_level": level}
+            for (label, _, _), t, (score, level) in zip(DIURNAL_CURVE, temps, predictions)
         ]
-
-        points = []
-        for hour_label, temp_offset, uv in diurnal_curve:
-            hour_temp = round(base_temp + temp_offset, 1)
-            humidity = env["humidity"]
-            risk_score, risk_level = ml_service.predict(
-                hour_temp, humidity, uv, vegetation_index, building_density, shade_score
-            )
-            points.append({
-                "hour": hour_label,
-                "temperature": hour_temp,
-                "heat_risk": round(risk_score, 1),
-                "risk_level": risk_level
-            })
-
-        return points
 
     @staticmethod
     def build_recommendations(db: Session, lat: float, lon: float) -> Tuple[float, str, List[Dict[str, str]]]:

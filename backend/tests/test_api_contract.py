@@ -9,8 +9,13 @@ network-independent validation paths (400/422 responses) are tested here,
 since the actual live-data paths depend on third-party services that are not
 appropriate to hit inside a unit test.
 """
+import os
+
 import pytest
 from fastapi.testclient import TestClient
+
+# Keep tests offline and deterministic: no live Open-Meteo call.
+os.environ["LIVE_WEATHER"] = "0"
 
 from app.main import app
 
@@ -103,7 +108,10 @@ def test_location_heat_detail_returns_real_shape_for_campus_point():
     assert response.status_code == 200
     body = response.json()
     assert 0 <= body["heat_risk_score"] <= 100
-    assert len(body["forecast"]) == 6
+    # "Now" + the 6-point model-driven diurnal curve from /heat-trend.
+    assert len(body["forecast"]) == 7
+    assert body["risk_level"].removesuffix(" Heat Risk") in {"Low", "Moderate", "High", "Extreme"}
+    assert 0 <= body["environment"]["vegetation_index"] <= 1
     assert len(body["recommendations"]) >= 1
 
 
@@ -142,3 +150,20 @@ def test_route_heat_analyzes_a_valid_campus_path():
     assert body["route_type"] == "custom"
     assert len(body["sampled_points"]) >= 2
     assert 0 <= body["average_heat_risk"] <= 100
+
+
+def test_recommend_route_uses_campus_graph():
+    # Library -> Sports Complex: routed in-process over the committed OSM path graph.
+    payload = {"start_lat": 12.8233, "start_lon": 80.0426, "end_lat": 12.8250, "end_lon": 80.0470}
+    response = client.post("/api/recommend-route", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    for key in ("coolest_route", "balanced_route", "fastest_route"):
+        route = body[key]
+        assert route["distance_km"] > 0 and route["duration_minutes"] > 0
+        assert len(route["geometry"]) >= 2
+        assert len(route["heat_segments"]) == len(route["geometry"]) - 1
+        assert route["turn_by_turn"][-1]["instruction"] == "Arrive at your destination"
+    # Coolest is never hotter than fastest, fastest never longer than coolest.
+    assert body["coolest_route"]["average_heat_risk"] <= body["fastest_route"]["average_heat_risk"] + 0.5
+    assert body["fastest_route"]["distance_km"] <= body["coolest_route"]["distance_km"]

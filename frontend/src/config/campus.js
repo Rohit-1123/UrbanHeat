@@ -37,32 +37,13 @@ export const SRM_CAMPUS = {
     { name: 'Food Court - Tech Park', lat: 12.823418, lon: 80.044586, category: 'Food court' },
     { name: 'Inspiration Studio Hall', lat: 12.823573, lon: 80.043505, category: 'DEI' }
   ],
+  // Preset walks between named places; each verified to route on the campus path graph.
   landmarks: [
-    {
-      name: 'SRM Main Gate to Tech Park',
-      start: { lat: 12.8232, lon: 80.0450 },
-      end: { lat: 12.8246527, lon: 80.0452877 }
-    },
-    {
-      name: 'SRM Library to Hospital',
-      start: { lat: 12.8232845, lon: 80.0425857 },
-      end: { lat: 12.8210402, lon: 80.0479585 }
-    },
-    {
-      name: 'SRM Auditorium Road to Library',
-      start: { lat: 12.8244209, lon: 80.0460157 },
-      end: { lat: 12.8232845, lon: 80.0425857 }
-    },
-    {
-      name: 'SRM Hospital to Tech Park',
-      start: { lat: 12.8210402, lon: 80.0479585 },
-      end: { lat: 12.8246527, lon: 80.0452877 }
-    },
-    {
-      name: 'SRM Main Gate to Library',
-      start: { lat: 12.8232, lon: 80.0450 },
-      end: { lat: 12.8232845, lon: 80.0425857 }
-    }
+    { name: 'Biotechnology Block to Auditorium', start: { lat: 12.8225, lon: 80.0405 }, end: { lat: 12.8240, lon: 80.0460 } },
+    { name: 'Tech Park to Hospital', start: { lat: 12.8234, lon: 80.0446 }, end: { lat: 12.8190, lon: 80.0500 } },
+    { name: 'Library to Sports Complex', start: { lat: 12.8235, lon: 80.0426 }, end: { lat: 12.8250, lon: 80.0470 } },
+    { name: 'CRC Block to Cricket Ground', start: { lat: 12.8245, lon: 80.0430 }, end: { lat: 12.8260, lon: 80.0470 } },
+    { name: 'Main Block to Tech Park', start: { lat: 12.8240, lon: 80.0427 }, end: { lat: 12.8234, lon: 80.0446 } },
   ]
 };
 
@@ -78,3 +59,14 @@ export const isWithinSrmCampus = (lat, lon) => (
   && lon >= SRM_CAMPUS.bounds[0][1] - BOUNDS_MARGIN_DEG
   && lon <= SRM_CAMPUS.bounds[1][1] + BOUNDS_MARGIN_DEG
 );
+
+// Name of the closest curated campus place, or null if none is within ~120 m.
+export const nearestPlaceName = (lat, lon) => {
+  let best = null;
+  let bestDist = Infinity;
+  for (const place of SRM_CAMPUS.places) {
+    const d = Math.hypot((place.lat - lat) * 111000, (place.lon - lon) * 108500);
+    if (d < bestDist) { bestDist = d; best = place; }
+  }
+  return bestDist <= 120 ? best.name : null;
+};

@@ -1,20 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import InteractiveHeatMap from '../components/InteractiveHeatMap';
 import LocationSearch from '../components/LocationSearch';
 import SelectedLocationPanel from '../components/SelectedLocationPanel';
-import HeatLegend from '../components/HeatLegend';
-import {
-  Layers,
-  MapPin,
-  Info,
-  Flame,
-  Thermometer,
-  TreePine,
-  Building2,
-  ShieldAlert,
-  AlertCircle
-} from 'lucide-react';
-import { estimateMicroclimateForCoords } from '../utils/riskCalculator';
+import HourScrubber from '../components/HourScrubber';
+import { AlertCircle } from 'lucide-react';
 import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 
 const HeatMapPage = ({
@@ -26,26 +15,10 @@ const HeatMapPage = ({
   onNavigate,
   theme = 'light'
 }) => {
-  const [activeLayer, setActiveLayer] = useState('heat_intensity');
-  const [geoError, setGeoError] = useState(null);
-  const [centerLoc, setCenterLoc] = useState(currentLocation);
   // Real, hand-curated SRM campus places (name + coordinates) — not mock data.
   const campusLocations = SRM_CAMPUS.places.filter((location) => isWithinSrmCampus(location.lat, location.lon));
 
-  const layers = [
-    { id: 'heat_intensity', label: 'Heat Intensity', icon: Flame, desc: 'Overall urban thermal distribution' },
-    { id: 'surface_temp', label: 'Surface Temperature', icon: Thermometer, desc: 'Estimated land surface heat radiation' },
-    { id: 'vegetation', label: 'Vegetation (NDVI)', icon: TreePine, desc: 'Urban tree canopy & vegetative cooling' },
-    { id: 'built_up', label: 'Built-Up Density', icon: Building2, desc: 'Impervious concrete & asphalt density' },
-    { id: 'heat_risk', label: 'Heat Risk Level', icon: ShieldAlert, desc: 'Normalized 0–100 health vulnerability' },
-  ];
-
-  const handleSelectLocation = (loc) => {
-    setCenterLoc(loc);
-    if (onSelectLocation) {
-      onSelectLocation(loc);
-    }
-  };
+  const handleSelectLocation = (loc) => onSelectLocation?.(loc);
 
   const handleSelectPointFromMap = (pt) => {
     // Borrow the human-friendly place name/category from the real SRM campus
@@ -65,8 +38,6 @@ const HeatMapPage = ({
       latitude: pt.latitude,
       longitude: pt.longitude,
       temperature: pt.temperature,
-      feelsLike: pt.feelsLike || pt.temperature + 5,
-      surfaceTemp: pt.surfaceTemp || pt.temperature + 4.5,
       heatRiskScore: pt.heat_risk,
       heat_risk: pt.heat_risk,
       riskLevel: pt.risk_level,
@@ -89,95 +60,19 @@ const HeatMapPage = ({
         : 'Microclimate stabilized by ambient ventilation or vegetation canopy.'
     };
 
-    setCenterLoc(target);
-    if (onSelectLocation) {
-      onSelectLocation(target);
-    }
+    handleSelectLocation(target);
   };
 
-  const handleGeoLocation = () => {
-    setGeoError(null);
-    if (!navigator.geolocation) {
-      setGeoError('Geolocation is not supported by your browser.');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (!isWithinSrmCampus(pos.coords.latitude, pos.coords.longitude)) {
-          setGeoError('Your location is outside the SRM Kattankulathur campus area.');
-          return;
-        }
-        const estimated = estimateMicroclimateForCoords(pos.coords.latitude, pos.coords.longitude);
-        const userLoc = {
-          id: 'my-gps-location',
-          city: 'My Location',
-          area: 'Current Geolocation',
-          ...estimated,
-          weatherCondition: estimated.heatRiskScore > 65 ? 'High Thermal Stress' : 'Clear / Moderate Sun',
-          hottestZone: estimated.builtUpDensity > 0.7 ? 'Surrounding Built Corridor' : 'Open Ground Area',
-          recommendedAction: estimated.heatRiskScore > 70
-            ? 'High heat hazard detected. Hydrate regularly and seek shaded areas.'
-            : 'Moderate thermal conditions. Maintain regular hydration precautions.',
-        };
-
-        handleSelectLocation(userLoc);
-        if (onUseMyLocation) onUseMyLocation();
-      },
-      (err) => {
-        setGeoError(`Unable to retrieve location (${err.message}). Showing default urban zone.`);
-      },
-      { timeout: 8000 }
-    );
-  };
-
-  const activeLayerObj = layers.find((l) => l.id === activeLayer) || layers[0];
-  const selectedArea = centerLoc || currentLocation || campusLocations[0];
+  const selectedArea = currentLocation || campusLocations[0];
 
   return (
     <div className="page-container heatmap-page">
-      {/* Page Header with Layer Controls */}
       <div className="page-header-row">
         <div className="page-title-group">
-          <h1 className="page-title">Urban Spatial Heat Map</h1>
-          <p className="page-subtitle">
-            Interactive microclimate GIS mapping of thermal hotspots, canopy cover, and urban heat risk
-          </p>
-        </div>
-
-        {/* Map Layer Switcher */}
-        <div className="layer-control-container">
-          <div className="layer-control-label">
-            <Layers size={14} />
-            <span>Map Layers:</span>
-          </div>
-          <div className="layer-control-pills">
-            {layers.map((l) => {
-              const Icon = l.icon;
-              return (
-                <button
-                  key={l.id}
-                  className={`layer-pill-btn ${activeLayer === l.id ? 'active' : ''}`}
-                  onClick={() => setActiveLayer(l.id)}
-                  title={l.desc}
-                >
-                  <Icon size={13} />
-                  <span>{l.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          <h1 className="page-title">Campus Heat Map</h1>
+          <p className="page-subtitle">Tap anywhere on campus to inspect its heat conditions.</p>
         </div>
       </div>
-
-      {/* Geolocation Warning Toast (if error) */}
-      {geoError && (
-        <div className="map-alert-toast">
-          <AlertCircle size={16} />
-          <span>{geoError}</span>
-          <button className="toast-dismiss-btn" onClick={() => setGeoError(null)}>×</button>
-        </div>
-      )}
 
       {/* Live Data Unavailable Toast — real backend failure, never a fake/mock substitute */}
       {heatPointsError && (
@@ -192,7 +87,7 @@ const HeatMapPage = ({
         <LocationSearch
           currentLocation={selectedArea}
           onSelectLocation={handleSelectLocation}
-          onUseMyLocation={handleGeoLocation}
+          onUseMyLocation={onUseMyLocation}
         />
       </div>
 
@@ -201,41 +96,24 @@ const HeatMapPage = ({
         {/* Left/Main Column: Map Frame */}
         <div className="map-frame-column">
           <div className="map-frame">
-            {/* Active Layer Tag Overlay */}
-            <div className="active-layer-indicator">
-              <span className="indicator-dot" />
-              <span>Active Layer: <strong>{activeLayerObj.label}</strong></span>
-            </div>
-
             {/* Interactive Leaflet Map */}
             <InteractiveHeatMap
               points={heatPoints}
-              centerLocation={centerLoc || currentLocation}
+              centerLocation={currentLocation}
               selectedLocation={selectedArea}
-              activeLayer={activeLayer}
               onSelectPoint={handleSelectPointFromMap}
-              onUseMyLocation={handleGeoLocation}
+              onUseMyLocation={onUseMyLocation}
               theme={theme}
             />
-
-            {/* Dynamic Heat Legend Overlay */}
-            <HeatLegend activeLayer={activeLayer} />
-          </div>
-
-          {/* Quick Explanatory Note below map */}
-          <div className="map-meta-info-strip">
-            <div className="info-chip">
-              <Info size={14} className="text-primary" />
-              <span><strong>Interactive GIS:</strong> Click any heat circle or marker on the map to inspect its real-time microclimate conditions.</span>
-            </div>
-            <div className="layer-desc-chip">
-              <span>Showing: {activeLayerObj.desc}</span>
-            </div>
           </div>
         </div>
 
         {/* Right Column: Selected Location Information Panel */}
         <div className="map-sidebar-column">
+          <HourScrubber
+            key={`${selectedArea?.lat ?? selectedArea?.latitude},${selectedArea?.lon ?? selectedArea?.longitude}`}
+            forecast={selectedArea?.forecast}
+          />
           <SelectedLocationPanel
             location={selectedArea}
             onCenterMap={handleSelectLocation}

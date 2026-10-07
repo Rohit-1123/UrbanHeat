@@ -52,6 +52,14 @@ const SimulatorView = () => {
     }
   };
 
+  // Sliders fire on every tick; wait for a 250 ms pause before calling the model.
+  const debounceRef = useRef(null);
+  const scheduleSimulation = (...args) => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => runSimulation(...args), 250);
+  };
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
   // Run a real prediction for the default slider values on mount, instead
   // of showing a hardcoded starting score.
   useEffect(() => {
@@ -72,7 +80,7 @@ const SimulatorView = () => {
       min: 25,
       max: 45,
       step: 1,
-      onChange: (val) => { setSimTemp(val); runSimulation(val, simHumidity, simVeg, simBld); }
+      onChange: (val) => { setSimTemp(val); scheduleSimulation(val, simHumidity, simVeg, simBld); }
     },
     {
       key: 'humidity',
@@ -84,7 +92,7 @@ const SimulatorView = () => {
       min: 30,
       max: 90,
       step: 1,
-      onChange: (val) => { setSimHumidity(val); runSimulation(simTemp, val, simVeg, simBld); }
+      onChange: (val) => { setSimHumidity(val); scheduleSimulation(simTemp, val, simVeg, simBld); }
     },
     {
       key: 'veg',
@@ -96,7 +104,7 @@ const SimulatorView = () => {
       min: 0.05,
       max: 0.95,
       step: 0.05,
-      onChange: (val) => { setSimVeg(val); runSimulation(simTemp, simHumidity, val, simBld); }
+      onChange: (val) => { setSimVeg(val); scheduleSimulation(simTemp, simHumidity, val, simBld); }
     },
     {
       key: 'bld',
@@ -108,7 +116,7 @@ const SimulatorView = () => {
       min: 0.1,
       max: 0.95,
       step: 0.05,
-      onChange: (val) => { setSimBld(val); runSimulation(simTemp, simHumidity, simVeg, val); }
+      onChange: (val) => { setSimBld(val); scheduleSimulation(simTemp, simHumidity, simVeg, val); }
     }
   ];
 

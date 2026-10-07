@@ -14,7 +14,8 @@ This document explains exactly where every number in UrbanHeat comes from, and i
 | Hourly temperature/humidity/apparent-temperature/UV-index forecast (next 24h) | **Open-Meteo** `/v1/forecast` (`hourly=` params) | Same, Home page 24h forecast strip |
 | Place-name search results within campus viewbox | **OpenStreetMap Nominatim** | `GET /api/location-search`, backend-proxied |
 | Base map imagery | **OpenStreetMap raster tiles** | Both Leaflet map components |
-| Real walkable street/path geometry, turn-by-turn steps, distance, duration | **OSRM** (`routing.openstreetmap.de/routed-foot`) | `POST /api/recommend-route` |
+| Walkable path network (geometry, way names) | **OpenStreetMap** via Overpass, saved once to `backend/data/campus_paths.json` | `POST /api/recommend-route` (in-process Dijkstra) |
+| Live temperature, humidity, UV for location detail | **Open-Meteo** (backend, cached 10 min) | `POST /api/location-heat-detail` |
 
 ### 1.2 Model-predicted data
 
@@ -147,14 +148,14 @@ Anchors used: **"urban core"** ≈ `(12.823, 80.045)` — the dense academic/tec
 
 | Category | Examples | Refreshes when? |
 |---|---|---|
-| **Real-time external API** | Open-Meteo current weather (Home page only); OSRM route geometry/duration; Nominatim search results | Every request (no caching on the Open-Meteo/Nominatim path; OSRM route results cached 5 min in-process) |
+| **Real-time external API** | Open-Meteo current weather (frontend Home widget, and backend location detail); Nominatim search results | Backend Open-Meteo cached 10 min; Nominatim and the frontend widget per request |
 | **Calculated (model/formula)** | `heat_risk` score, `risk_level`, diurnal trend curve, route heat aggregates, recommendation ranking | Every request — always computed live from current inputs, never pre-stored per-request |
 | **Static/seeded project data** | The 256-point heat grid's environmental values, campus POI coordinates, campus bounding box, named test routes | Only when `seed_heat_data.py` is re-run, or the source file is edited |
 
 ## 6. Missing-Data Handling
 
 - **No seeded point within 1.5 km:** falls back to the spatial-interpolation formula (§3) — never returns an error or a null heat score.
-- **OSRM unreachable:** `fetch_osrm_routes` retries 3× with backoff, then returns an empty list, which surfaces as a `503` from `/api/recommend-route`.
+- **Open-Meteo unreachable (backend):** `current_weather()` returns `None`, the failure is cached for 10 minutes, and location detail falls back to the dataset's weather (`live_weather: false`). Routing has no external dependency.
 - **Nominatim unreachable:** `/api/location-search` returns `503` directly.
 - **Open-Meteo unreachable (frontend):** `weatherService.js` catches the failure and returns a clearly-labeled `{isLive: false, source: 'Calibrated Microclimate Engine', ...}` object computed from `estimateMicroclimateForCoords` instead — the UI is expected to be able to distinguish live vs. fallback via the `isLive`/`source` fields (verify against the actual component consuming it for whether this label is surfaced to the user).
 - **ML model file missing/corrupt:** silent fallback to the analytical formula (§2.4) — logged as a warning server-side, invisible to the API consumer.

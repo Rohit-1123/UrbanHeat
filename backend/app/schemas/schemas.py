@@ -64,6 +64,8 @@ class RouteAnalysis(BaseModel):
     geometry: List[List[float]]  # List of [lat, lon]
     sampled_points: List[RoutePointHeat]
     turn_by_turn: List[Dict[str, Any]] = Field(default_factory=list)
+    # Per-edge heat for drawing the route coloured by exposure: [{coords: [[lat, lon], [lat, lon]], heat_risk}]
+    heat_segments: List[Dict[str, Any]] = Field(default_factory=list)
 
 class RouteRecommendationResponse(BaseModel):
     coolest_route: RouteAnalysis
@@ -96,6 +98,11 @@ class LocationDetailResponse(BaseModel):
     warning_message: str
     forecast: List[ForecastHour]
     recommendations: List[Dict[str, str]]
+    # Raw numeric inputs (0-1 ratios, °C, %) behind the display strings above.
+    environment: Dict[str, float] = Field(default_factory=dict)
+    # True when temperature/humidity/UV come from live Open-Meteo, not the dataset.
+    live_weather: bool = False
+    observed_at: Optional[str] = None
 
 class HeatTrendPoint(BaseModel):
     hour: str

@@ -1,14 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
 import RouteFinderView from '../components/RouteFinderView';
 import { recommendRoute } from '../services/api';
-import { isWithinSrmCampus } from '../config/campus';
+import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 
 const RoutesPage = ({ currentLocation }) => {
-  const initialStart = currentLocation?.lat && currentLocation?.lon
-    ? { lat: currentLocation.lat, lon: currentLocation.lon }
-    : { lat: 12.8232, lon: 80.0450 };
-  const [startCoords, setStartCoords] = useState(initialStart);
-  const [endCoords, setEndCoords] = useState({ lat: 12.8246527, lon: 80.0452877 });
+  const [startCoords, setStartCoords] = useState(SRM_CAMPUS.landmarks[0].start);
+  const [endCoords, setEndCoords] = useState(SRM_CAMPUS.landmarks[0].end);
   const [selectedRouteType, setSelectedRouteType] = useState('coolest');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -52,33 +49,9 @@ const RoutesPage = ({ currentLocation }) => {
       setRoutesData(res);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
-      const unavailableRoute = {
-        route_name: 'No verified campus route',
-        duration_minutes: 0,
-        distance_km: 0,
-        average_heat_risk: 0,
-        maximum_heat_risk: 0,
-        heat_risk_level: 'Unavailable',
-        shaded_area_percentage: 0,
-        geometry: [],
-        heat_profile: [{ position: 0, score: 0 }, { position: 100, score: 0 }],
-        turn_by_turn: []
-      };
-      setRoutesData({
-        coolest_route: { ...unavailableRoute, route_type: 'coolest' },
-        balanced_route: { ...unavailableRoute, route_type: 'balanced' },
-        fastest_route: { ...unavailableRoute, route_type: 'fastest' },
-        recommended_route: 'coolest_route',
-        comparison: { alternatives_available: false }
-      });
-      const status = err.response?.status;
-      if (status === 400) {
-        setError('Both route points must be inside the SRM campus boundary.');
-      } else if (err.errorType === 'network' || err.errorType === 'timeout') {
-        setError(err.friendlyMessage);
-      } else {
-        setError('Could not calculate a verified walking route for these campus points. Try a nearby mapped road or landmark.');
-      }
+      // No placeholder routes: clear the result and show the backend's own reason.
+      setRoutesData(null);
+      setError(err.friendlyMessage || 'Could not calculate a campus walking route for these points.');
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -142,9 +115,9 @@ const RoutesPage = ({ currentLocation }) => {
   return (
     <div className="page-container routes-page-wrapper">
       <div className="page-header">
-        <h1 className="page-title">SRM Campus Cool Routes</h1>
+        <h1 className="page-title">Cool Routes</h1>
         <p className="page-subtitle">
-          Compare mapped walking paths inside SRM Institute of Science and Technology, Kattankulathur, using campus heat data.
+          Walking routes across SRM campus, ranked by how much heat you'll be exposed to.
         </p>
       </div>
 
@@ -159,7 +132,7 @@ const RoutesPage = ({ currentLocation }) => {
         onSearch={handleSearch}
         onUseLocation={handleUseLocation}
         onSelectPreset={handleSelectPreset}
-        onOutsideCampusClick={() => setError('That point is outside the SRM campus boundary. Choose a location inside the dashed campus area.')}
+        onOutsideCampusClick={() => setError('That point is outside the SRM campus boundary. Choose a point inside the campus.')}
       />
     </div>
   );

@@ -1,32 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import LocationSearch from '../components/LocationSearch';
-import HeatOverviewCard from '../components/HeatOverviewCard';
-import InstallAppButton from '../components/InstallAppButton';
-import { MapPin, Database, Cpu, ShieldAlert, Lightbulb, ArrowRight, Sparkles, Map, Loader2, Navigation, Droplets, Thermometer } from 'lucide-react';
+import HeatWave from '../components/HeatWave';
+import { MapPin, Navigation, Map, Loader2, RefreshCw, ArrowRight } from 'lucide-react';
 import { fetchLiveWeather } from '../services/weatherService';
 import { getRiskColor } from '../utils/riskCalculator';
+import { SRM_CAMPUS } from '../config/campus';
+
+const HEADLINES = {
+  Low: ['Comfortable', 'across campus right now'],
+  Moderate: ['Warm', 'keep to shaded paths'],
+  High: ['Hot', 'limit time in direct sun'],
+  Extreme: ['Extreme heat', 'avoid outdoor exertion'],
+};
+
+const EXPLORE = [
+  { id: 'analytics', title: 'Trends & analytics', desc: 'How heat builds across the day' },
+  { id: 'risk', title: 'Risk assessment', desc: 'What is driving the score here' },
+  { id: 'simulator', title: 'What-if simulator', desc: 'Try more shade or greenery' },
+  { id: 'recommendations', title: 'Cooling actions', desc: 'Ranked advice for this spot' },
+];
+
+const STEPS = [
+  ['Pick a place', 'Search, tap the map or use your location.'],
+  ['Read conditions', 'Temperature, humidity, UV, canopy and building density.'],
+  ['Predict risk', 'A trained model scores heat risk from 0 to 100.'],
+  ['Compare routes', 'Walking routes ranked by heat exposure.'],
+  ['Act', 'Location-specific advice to stay cool.'],
+];
+
+const fmt = (n, unit = '') => (Number.isFinite(n) ? `${Math.round(n)}${unit}` : '—');
 
 const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNavigate }) => {
   const [syncingWeather, setSyncingWeather] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleSyncWeather = async () => {
     setSyncingWeather(true);
     try {
-      const lat = currentLocation?.latitude ?? currentLocation?.lat ?? 12.8232;
-      const lon = currentLocation?.longitude ?? currentLocation?.lon ?? 80.0450;
+      const lat = currentLocation?.latitude ?? currentLocation?.lat ?? SRM_CAMPUS.center[0];
+      const lon = currentLocation?.longitude ?? currentLocation?.lon ?? SRM_CAMPUS.center[1];
       const live = await fetchLiveWeather(lat, lon);
       onSelectLocation({
         ...currentLocation,
         ...live,
-        // fetchLiveWeather's response carries no coordinates, and currentLocation
-        // may still be null at auto-load time (this effect can fire before the
-        // app has set an initial location) — always set these explicitly so the
-        // map/route views never receive a location with missing lat/lon.
         latitude: lat,
         longitude: lon,
         lat,
         lon,
-        area: currentLocation?.area || 'Local Area',
+        area: currentLocation?.area || 'SRM Institute Campus',
         city: currentLocation?.city || 'SRM Kattankulathur'
       });
     } finally {
@@ -34,224 +60,135 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
     }
   };
 
-  // Auto-load live weather for the default/current location on first mount,
-  // so the overview card shows real data without requiring a manual sync click.
+  // Load live weather once on first visit so the hero shows real readings.
   useEffect(() => {
-    if (!currentLocation?.source) {
-      handleSyncWeather();
-    }
+    if (!currentLocation?.source) handleSyncWeather();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const steps = [
-    {
-      num: 1,
-      title: 'Select Location',
-      desc: 'Choose an SRM campus zone to inspect microclimate data.',
-      icon: MapPin
-    },
-    {
-      num: 2,
-      title: 'Collect Environmental Data',
-      desc: 'Retrieves satellite NDVI vegetation, building density, & temperature metrics.',
-      icon: Database
-    },
-    {
-      num: 3,
-      title: 'Analyze Heat Conditions',
-      desc: 'Evaluates localized thermal radiation spikes and surface heat retention.',
-      icon: Cpu
-    },
-    {
-      num: 4,
-      title: 'Assess Heat Risk',
-      desc: 'Calculates normalized 0–100 risk scores for health vulnerability.',
-      icon: ShieldAlert
-    },
-    {
-      num: 5,
-      title: 'Provide Recommendations',
-      desc: 'Delivers actionable personal safety guidelines & urban greening solutions.',
-      icon: Lightbulb
-    }
-  ];
+  const loc = currentLocation || {};
+  const score = loc.heatRiskScore ?? loc.heat_risk;
+  const level = loc.riskLevel ?? loc.risk_level;
+  const [headline, subline] = HEADLINES[level] || ['Checking', 'campus conditions'];
+  const riskColor = getRiskColor(score ?? 0);
+  const uv = loc.uvIndex ?? loc.uv_index;
+  const ring = 2 * Math.PI * 21;
 
-  // Real fields only — mirrors the field-fallback pattern already used by
-  // HeatOverviewCard/HeatAlertBanner. No fabricated defaults: undefined
-  // fields render as "—" rather than a made-up number.
-  const temperature = currentLocation?.temperature;
-  const heatRiskScore = currentLocation?.heatRiskScore ?? currentLocation?.heat_risk;
-  const riskLevel = currentLocation?.riskLevel ?? currentLocation?.risk_level;
-  const humidity = currentLocation?.humidity;
-  const riskColor = getRiskColor(heatRiskScore ?? 0);
+  const hours = (loc.forecast24h || []).filter((_, i) => i % 3 === 0).slice(0, 8);
 
   return (
-    <div className="page-container home-page">
-      {/* Mobile-only compact status summary — shown instead of the desktop
-          hero at phone widths (see .mobile-home-summary in App.css). Reads
-          the same currentLocation prop, no separate data fetch. */}
-      <section className="mobile-home-summary">
-        <div className="mobile-home-location">
-          <MapPin size={15} className="text-emerald" />
-          <span>{currentLocation?.area || 'SRM Kattankulathur Campus'}</span>
+    <div className="page-container home-sky">
+      <section className="sky-hero">
+        <div>
+          <span className="sky-eyebrow">
+            <MapPin size={14} />
+            {loc.area || 'SRM Kattankulathur'} · {now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} · {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+
+          {currentLocation ? (
+            <h1 className="sky-headline">{headline}<span>{subline}</span></h1>
+          ) : (
+            <h1 className="sky-headline sky-loading"><Loader2 size={28} className="animate-spin" /> Reading the sky…</h1>
+          )}
+
+          {loc.recommendedAction && <p className="sky-advice">{loc.recommendedAction}</p>}
+
+          <div className="sky-actions">
+            <button type="button" className="sky-btn primary" onClick={() => onNavigate('routes')}>
+              <Navigation size={16} /> Find a cooler route
+            </button>
+            <button type="button" className="sky-btn" onClick={() => onNavigate('map')}>
+              <Map size={16} /> Open heat map
+            </button>
+          </div>
         </div>
 
-        {!currentLocation ? (
-          <div className="mobile-home-status-card mobile-home-status-loading">
-            <Loader2 size={20} className="animate-spin text-emerald" />
-            <span>Loading live environmental data...</span>
+        <div className="sky-now">
+          <div className="sky-temp" aria-label={`Temperature ${fmt(loc.temperature)} degrees Celsius`}>
+            {fmt(loc.temperature)}<sup>°C</sup>
           </div>
-        ) : (
-          <div className="mobile-home-status-card">
-            <div className="mobile-home-status-top">
-              <div className="mobile-home-metric">
-                <Thermometer size={18} className="text-red" />
-                <span className="mobile-home-metric-val">{Number.isFinite(temperature) ? `${temperature}°C` : '—'}</span>
-              </div>
-              <div className="mobile-home-metric">
-                <Droplets size={18} className="text-blue" />
-                <span className="mobile-home-metric-val">{Number.isFinite(humidity) ? `${humidity}%` : '—'}</span>
-              </div>
-              <span
-                className="mobile-home-risk-pill"
-                style={{ backgroundColor: `${riskColor}20`, color: riskColor, borderColor: `${riskColor}40` }}
-              >
-                {riskLevel || 'Unknown'} Risk
-              </span>
-            </div>
 
-            {currentLocation?.recommendedAction && (
-              <p className="mobile-home-action">{currentLocation.recommendedAction}</p>
-            )}
-          </div>
-        )}
+          <dl className="sky-facts">
+            <dt>Feels like</dt><dd>{fmt(loc.feelsLike, '°')}</dd>
+            <dt>Humidity</dt><dd>{fmt(loc.humidity, '%')}</dd>
+            <dt>UV index</dt><dd>{Number.isFinite(uv) ? uv : '—'}</dd>
+            {Number.isFinite(loc.windSpeed) && <><dt>Wind</dt><dd>{loc.windSpeed} km/h</dd></>}
+          </dl>
 
-        <div className="mobile-home-cta-row">
-          <button className="mobile-home-cta-primary" onClick={() => onNavigate('routes')}>
-            <Navigation size={17} />
-            <span>Find a Cooler Route</span>
+          <button type="button" className="sky-risk" onClick={() => onNavigate('risk')} aria-label="Open risk assessment">
+            <svg className="sky-risk-ring" viewBox="0 0 48 48" aria-hidden="true">
+              <circle className="track" cx="24" cy="24" r="21" />
+              <circle
+                className="value"
+                cx="24"
+                cy="24"
+                r="21"
+                stroke={riskColor}
+                strokeDasharray={`${((score ?? 0) / 100) * ring} ${ring}`}
+              />
+            </svg>
+            <span>
+              <small>Heat risk</small>
+              <strong>{Number.isFinite(score) ? `${Math.round(score)} · ${level}` : '—'}</strong>
+            </span>
           </button>
-          <button className="mobile-home-cta-secondary" onClick={() => onNavigate('map')}>
-            <Map size={17} />
-            <span>Open Heat Map</span>
-          </button>
-        </div>
 
-        <InstallAppButton variant="banner" />
-      </section>
-
-      {/* Hero Section (desktop) */}
-      <section className="hero-section">
-        <div className="hero-content">
-          <div className="hero-badge">
-            <Sparkles size={14} className="text-emerald" />
-            <span>Smart Urban Climate Intelligence</span>
-          </div>
-
-          <h1 className="hero-title">
-            Understand Your City's Heat.<br />
-            <span className="text-gradient">Protect Your Community.</span>
-          </h1>
-
-          <p className="hero-subheading">
-            Monitor urban heat conditions, identify high-risk thermal zones, analyze microclimate patterns, and discover long-term solutions for a cooler and more sustainable city.
-          </p>
-
-          <div className="hero-actions">
-            <button className="btn-hero-primary" onClick={() => onNavigate('map')}>
-              <Map size={18} />
-              <span>Explore Heat Map</span>
-            </button>
-
-            <button className="btn-hero-secondary" onClick={() => onNavigate('risk')}>
-              <ShieldAlert size={18} />
-              <span>Check Heat Risk</span>
+          <div className="sky-meta-row">
+            <span className={`sky-live-dot ${loc.isLive ? '' : 'off'}`} />
+            <span>{loc.isLive ? `Live weather · ${loc.lastUpdated}` : 'Campus dataset'}</span>
+            <button type="button" className="sky-icon-btn" onClick={handleSyncWeather} disabled={syncingWeather} title="Sync live weather from Open-Meteo">
+              <RefreshCw size={12} className={syncingWeather ? 'animate-spin' : ''} />
+              {syncingWeather ? 'Syncing' : 'Sync'}
             </button>
           </div>
         </div>
       </section>
 
-      {/* Quick Location Search Section */}
-      <section className="section-block">
-        <div className="section-header-centered">
-          <h2>Explore SRM Campus</h2>
-          <p>Inspect heat conditions and land surface temperatures across the SRM Institute campus.</p>
+      <HeatWave forecast={loc.forecast} />
+
+      {hours.length > 0 && (
+        <section aria-label="Next hours">
+          <h2 className="sky-section-title">Next hours</h2>
+          <div className="sky-hours">
+            {hours.map((h, i) => (
+              <div key={h.time} className="sky-hour">
+                <span>{i === 0 ? 'Now' : h.time}</span>
+                <strong>{h.temp}°</strong>
+                <span>feels {h.feelsLike}°</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="sky-split">
+        <div>
+          <h2 className="sky-section-title">Check another place</h2>
+          <LocationSearch
+            currentLocation={currentLocation}
+            onSelectLocation={onSelectLocation}
+            onUseMyLocation={onUseMyLocation}
+          />
         </div>
 
-        <LocationSearch
-          currentLocation={currentLocation}
-          onSelectLocation={onSelectLocation}
-          onUseMyLocation={onUseMyLocation}
-        />
-      </section>
-
-      {/* Current Heat Overview Cards */}
-      <section className="section-block">
-        <div className="section-header-inline">
-          <div>
-            <div className="section-title-tag-wrap">
-              <h2>Current Heat Overview</h2>
-              {currentLocation?.source && (
-                <span className="source-live-badge">
-                  <span className="live-dot" /> {currentLocation.source}
-                </span>
-              )}
-            </div>
-            <p>Summary for <strong>{currentLocation?.area || 'Selected Urban Zone'}</strong> ({currentLocation?.city || 'City'})</p>
-          </div>
-
-          <div className="header-actions-wrap">
-            <button
-              className="btn-sync-live"
-              onClick={handleSyncWeather}
-              disabled={syncingWeather}
-              title="Sync real-time atmospheric data from Open-Meteo"
-            >
-              {syncingWeather ? (
-                <>
-                  <Loader2 size={15} className="animate-spin text-emerald" />
-                  <span>Syncing...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={15} />
-                  <span>Sync Live Weather</span>
-                </>
-              )}
-            </button>
-
-            <button className="btn-text-link-lg" onClick={() => onNavigate('analytics')}>
-              <span>Detailed Analytics</span>
+        <nav className="sky-links" aria-label="Explore">
+          <h2 className="sky-section-title">Explore</h2>
+          {EXPLORE.map((item) => (
+            <button key={item.id} type="button" className="sky-link" onClick={() => onNavigate(item.id)}>
+              <span>{item.title}<small>{item.desc}</small></span>
               <ArrowRight size={16} />
             </button>
-          </div>
-        </div>
-
-        <HeatOverviewCard locationData={currentLocation} onNavigate={onNavigate} />
+          ))}
+        </nav>
       </section>
 
-      {/* How It Works Section */}
-      <section className="section-block how-it-works-section">
-        <div className="section-header-centered">
-          <h2>How UrbanHeat Works</h2>
-          <p>A 5-step analytical journey from environmental data collection to localized cooling actions.</p>
-        </div>
-
-        <div className="how-it-works-grid">
-          {steps.map((step) => {
-            const Icon = step.icon;
-            return (
-              <div key={step.num} className="process-step-card">
-                <div className="step-badge">{step.num}</div>
-                <div className="step-icon-wrapper">
-                  <Icon size={22} className="text-emerald" />
-                </div>
-                <h3>{step.title}</h3>
-                <p>{step.desc}</p>
-              </div>
-            );
-          })}
-        </div>
+      <section aria-label="How UrbanHeat works">
+        <h2 className="sky-section-title">How it works</h2>
+        <ol className="sky-steps">
+          {STEPS.map(([title, desc]) => (
+            <li key={title}><strong>{title}</strong>{desc}</li>
+          ))}
+        </ol>
       </section>
     </div>
   );

@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.database.connection import init_db
 from app.services.ml_service import ml_service
+from app.services.weather_service import current_weather
 from app.api.heat import router as heat_router
 from app.api.routes import router as routes_router
 
@@ -26,6 +28,9 @@ async def lifespan(app: FastAPI):
     
     # Load ML Model once at startup
     ml_service.load_model()
+
+    # Warm the live-weather cache off the request path (Open-Meteo can take seconds).
+    threading.Thread(target=current_weather, daemon=True).start()
     
     yield
     # Shutdown logic

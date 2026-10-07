@@ -2,62 +2,53 @@ import React, { useState } from 'react';
 import RecommendationsPage from './RecommendationsPage';
 import LearnPage from './LearnPage';
 import AboutPage from './AboutPage';
-import { ShieldCheck, BookOpen, Info, Sparkles } from 'lucide-react';
+import { ShieldCheck, BookOpen } from 'lucide-react';
 
+// Two tabs: location-specific actions, and one Guide (heat science + about).
 const InsightsPage = ({ currentLocation, initialTab = 'recommendations' }) => {
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(initialTab === 'recommendations' ? 'recommendations' : 'guide');
 
   return (
     <div className="page-container insights-hub-page">
-      {/* Top Header & Sub-Tab Switcher */}
       <div className="hub-header-container">
         <div>
-          <h1 className="page-title">Climate Insights, Science & Actions</h1>
+          <h1 className="page-title">{activeTab === 'guide' ? 'Guide' : 'Cooling actions'}</h1>
           <p className="page-subtitle">
-            Actionable mitigation strategies, urban heat island science, and platform documentation
+            {activeTab === 'guide'
+              ? 'How urban heat works, and how UrbanHeat measures it.'
+              : 'What to do about the heat where you are.'}
           </p>
         </div>
 
-        {/* Sub-Tab Switcher */}
-        <div className="hub-subtabs-pill-bar">
+        <div className="hub-subtabs-pill-bar" role="tablist">
           <button
+            role="tab"
+            aria-selected={activeTab === 'recommendations'}
             className={`hub-tab-btn ${activeTab === 'recommendations' ? 'active' : ''}`}
             onClick={() => setActiveTab('recommendations')}
           >
             <ShieldCheck size={16} />
-            <span>Mitigation Actions</span>
+            <span>Cooling actions</span>
           </button>
-
           <button
-            className={`hub-tab-btn ${activeTab === 'learn' ? 'active' : ''}`}
-            onClick={() => setActiveTab('learn')}
+            role="tab"
+            aria-selected={activeTab === 'guide'}
+            className={`hub-tab-btn ${activeTab === 'guide' ? 'active' : ''}`}
+            onClick={() => setActiveTab('guide')}
           >
             <BookOpen size={16} />
-            <span>UHI Science</span>
-          </button>
-
-          <button
-            className={`hub-tab-btn ${activeTab === 'about' ? 'active' : ''}`}
-            onClick={() => setActiveTab('about')}
-          >
-            <Info size={16} />
-            <span>About UrbanHeat</span>
+            <span>Guide</span>
           </button>
         </div>
       </div>
 
-      {/* Tab Content Panels */}
       <div className="hub-content-viewport">
-        {activeTab === 'recommendations' && (
-          <RecommendationsPage currentLocation={currentLocation} />
-        )}
-
-        {activeTab === 'learn' && (
-          <LearnPage />
-        )}
-
-        {activeTab === 'about' && (
-          <AboutPage />
+        {activeTab === 'recommendations' && <RecommendationsPage currentLocation={currentLocation} />}
+        {activeTab === 'guide' && (
+          <>
+            <LearnPage />
+            <AboutPage />
+          </>
         )}
       </div>
     </div>

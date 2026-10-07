@@ -16,10 +16,11 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 import HeatAlertBanner from './components/HeatAlertBanner';
 
-import { fetchHeatPoints, fetchCurrentHeatData, checkBackendStatus } from './services/heatService';
+import { fetchHeatPoints, fetchCurrentHeatData, checkBackendStatus, locationFromDetail } from './services/heatService';
 import { getLocationHeatDetail } from './services/api';
 import { estimateMicroclimateForCoords } from './utils/riskCalculator';
 import './App.css';
+import './theme.css';
 import { isWithinSrmCampus } from './config/campus';
 
 const PageLoadingFallback = () => (
@@ -35,8 +36,25 @@ const getSystemPrefersDark = () => (
   && window.matchMedia('(prefers-color-scheme: dark)').matches
 );
 
+// Hash routing (#/routes, ...) so refresh, Back and shared links keep the page.
+const PAGES = ['home', 'map', 'routes', 'analytics', 'risk', 'simulator', 'insights', 'recommendations', 'guide', 'learn', 'about', 'settings'];
+const pageFromHash = () => {
+  const page = window.location.hash.replace(/^#\/?/, '');
+  return PAGES.includes(page) ? page : 'home';
+};
+const setActivePage = (page) => { window.location.hash = `/${page}`; };
+
 const App = () => {
-  const [activePage, setActivePage] = useState('home');
+  const [activePage, setActivePageState] = useState(pageFromHash);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setActivePageState(pageFromHash());
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   // 'light' | 'dark' | 'system' — the user's stored preference.
   const [themePreference, setThemePreference] = useState(() => (
     localStorage.getItem('urbanheat-theme') || 'light'
@@ -81,6 +99,14 @@ const App = () => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // The background sky warms with the selected place's heat risk (theme.css).
+  const skyScore = currentLocation?.heatRiskScore ?? currentLocation?.heat_risk;
+  useEffect(() => {
+    if (Number.isFinite(skyScore)) {
+      document.documentElement.style.setProperty('--sky-warmth', (skyScore / 100).toFixed(2));
+    }
+  }, [skyScore]);
+
   // Resolve themePreference -> theme, and keep it live if the user is on
   // 'system' and the OS-level color scheme changes while the app is open.
   useEffect(() => {
@@ -113,32 +139,17 @@ const App = () => {
 
     try {
       const detail = await getLocationHeatDetail(latitude, longitude, location.area || location.name || 'SRM Campus Location');
-      // getLocationHeatDetail's `vegetation_cover`/`building_density` are human-readable
-      // display strings (e.g. "High (Dense Urban)"), not the 0-1 numeric ratios the rest
-      // of the app expects under those same field names — spreading `detail` as-is would
-      // clobber the numeric convention and produce NaN wherever it's used in math (e.g.
-      // Math.round(building_density * 100)). Estimate real numeric values instead.
-      const estimated = estimateMicroclimateForCoords(latitude, longitude);
       setCurrentLocation((previous) => ({
         ...previous,
-        ...detail,
+        ...locationFromDetail(detail),
+        // Keep live Open-Meteo readings over the seeded dataset's values.
+        ...(location.isLive && { temperature: location.temperature, humidity: location.humidity }),
         latitude,
         longitude,
         lat: latitude,
         lon: longitude,
-        vegetation_index: estimated.vegetationIndex,
-        vegetationIndex: estimated.vegetationIndex,
-        vegetation: estimated.vegetation,
-        building_density: estimated.builtUpDensity,
-        builtUpDensity: estimated.builtUpDensity,
-        builtUpDensityLevel: estimated.builtUpDensityLevel,
-        shade_score: estimated.shade_score,
         area: location.area || location.name || detail.location_name,
         city: location.city || 'SRM Kattankulathur',
-        heatRiskScore: detail.heat_risk_score,
-        heat_risk: detail.heat_risk_score,
-        riskLevel: detail.risk_level?.replace(/ Heat Risk$/i, ''),
-        risk_level: detail.risk_level?.replace(/ Heat Risk$/i, ''),
         hottestZone: location.area || location.name || 'Selected SRM Campus Place',
       }));
     } catch {
@@ -167,19 +178,15 @@ const App = () => {
           setLocationError('Your location is outside the SRM Kattankulathur campus area. Use a pin inside the campus boundary.');
           return;
         }
-        const estimated = estimateMicroclimateForCoords(pos.coords.latitude, pos.coords.longitude);
-        const customLoc = {
+        handleSelectLocation({
           id: 'custom-gps-location',
           city: 'My Location',
           area: 'Current Geolocation',
-          ...estimated,
-          weatherCondition: estimated.heatRiskScore > 65 ? 'High Thermal Stress' : 'Clear / Moderate Sun',
-          hottestZone: estimated.builtUpDensity > 0.7 ? 'Surrounding Asphalt & Built Corridor' : 'Open Ground Area',
-          recommendedAction: estimated.heatRiskScore > 70
-            ? 'High heat hazard detected. Hydrate regularly and limit intense outdoor physical exertion.'
-            : 'Moderate thermal conditions. Take normal hydration precautions.',
-        };
-        setCurrentLocation(customLoc);
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
       },
       (err) => {
         if (err.code === 1) {
@@ -267,11 +274,8 @@ const App = () => {
         {activePage === 'recommendations' && (
           <InsightsPage currentLocation={currentLocation} initialTab="recommendations" />
         )}
-        {activePage === 'learn' && (
-          <InsightsPage currentLocation={currentLocation} initialTab="learn" />
-        )}
-        {activePage === 'about' && (
-          <InsightsPage currentLocation={currentLocation} initialTab="about" />
+        {['guide', 'learn', 'about'].includes(activePage) && (
+          <InsightsPage key="guide" currentLocation={currentLocation} initialTab="guide" />
         )}
 
         {activePage === 'settings' && (

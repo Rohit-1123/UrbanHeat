@@ -9,25 +9,16 @@ const RISK_LEVEL_COLOR = {
   Extreme: '#C94C4C',
 };
 
-const FALLBACK_TREND = [
-  { hour: '6 AM', temp: 26, risk: 'Low', color: '#5F8F6B' },
-  { hour: '9 AM', temp: 30, risk: 'Moderate', color: '#E69A2D' },
-  { hour: '12 PM', temp: 35, risk: 'High', color: '#D96C2F' },
-  { hour: '3 PM', temp: 37, risk: 'Severe', color: '#C94C4C' },
-  { hour: '6 PM', temp: 33, risk: 'High', color: '#D96C2F' },
-  { hour: '9 PM', temp: 29, risk: 'Moderate', color: '#E69A2D' },
-];
-
 const HeatTrendChart = ({ points, loading }) => {
   // `points` comes from GET /api/heat-trend: [{ hour, temperature, heat_risk, risk_level }]
-  const hourlyData = points && points.length > 0
-    ? points.map((p) => ({
-        hour: p.hour,
-        temp: p.temperature,
-        risk: p.risk_level,
-        color: RISK_LEVEL_COLOR[p.risk_level] || '#E69A2D',
-      }))
-    : FALLBACK_TREND;
+  const hourlyData = (points || []).map((p) => ({
+    hour: p.hour,
+    temp: p.temperature,
+    heatRisk: p.heat_risk,
+    risk: p.risk_level,
+    color: RISK_LEVEL_COLOR[p.risk_level] || '#E69A2D',
+  }));
+  const peak = hourlyData.reduce((best, d) => (!best || d.heatRisk > best.heatRisk ? d : best), null);
 
   if (loading) {
     return (
@@ -45,12 +36,25 @@ const HeatTrendChart = ({ points, loading }) => {
     );
   }
 
+  if (!peak) {
+    return (
+      <div className="chart-card-wrapper">
+        <div className="chart-card-header">
+          <div>
+            <h3>Diurnal Heat Pattern Analysis</h3>
+            <p className="subtext">Live trend data is unavailable right now. Please try again shortly.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="chart-card-wrapper">
       <div className="chart-card-header">
         <div>
           <h3>Diurnal Heat Pattern Analysis</h3>
-          <p className="subtext">Peak thermal stress window during typical summer day</p>
+          <p className="subtext">Model-predicted heat risk across a typical summer day</p>
         </div>
       </div>
 
@@ -75,7 +79,7 @@ const HeatTrendChart = ({ points, loading }) => {
 
       <div className="heat-pattern-footer-tip">
         <span className="tip-icon"><Flame size={16} /></span>
-        <span>Peak thermal exposure occurs between <strong>12:00 PM and 3:30 PM</strong>. Limit intense physical activity during this 3.5 hour window.</span>
+        <span>Peak predicted heat risk here is at <strong>{peak.hour}</strong> ({Math.round(peak.heatRisk)}/100). Limit intense outdoor activity around that time.</span>
       </div>
     </div>
   );

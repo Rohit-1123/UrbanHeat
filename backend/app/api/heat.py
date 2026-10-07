@@ -11,9 +11,19 @@ from app.schemas.schemas import (
 )
 from app.services.ml_service import ml_service
 from app.services.heat_service import heat_service
+from app.services.weather_service import current_weather
 from app.services.campus_config import SRM_CAMPUS_BOUNDS, is_within_srm_campus
 
 router = APIRouter(prefix="/api", tags=["Heat Analysis"])
+
+
+def uv_band(uv: float) -> str:
+    """WHO UV index categories."""
+    if uv >= 11: return "Extreme"
+    if uv >= 8: return "Very High"
+    if uv >= 6: return "High"
+    if uv >= 3: return "Moderate"
+    return "Low"
 
 @router.get("/location-search")
 def search_campus_locations(
@@ -119,15 +129,18 @@ def get_location_heat_detail(data: LocationDetailRequest, db: Session = Depends(
 
     try:
         score, risk_level, env = heat_service.evaluate_coordinate_heat_risk(db, data.lat, data.lon)
+        # Live Open-Meteo conditions replace the dataset's static weather; the
+        # location's own land-cover factors (vegetation/buildings/shade) stay.
+        live = current_weather()
+        if live:
+            env = {**env, "temperature": live["temperature"], "humidity": live["humidity"], "uv_index": live["uv_index"]}
+            score, risk_level = ml_service.predict(**env)
         score_int = int(round(score))
 
-        forecast = [
-            {"time": "Now", "temp": int(round(env["temperature"])), "heat_risk": score_int, "risk_level": risk_level},
-            {"time": "1 PM", "temp": int(round(env["temperature"] + 2)), "heat_risk": min(100, score_int + 4), "risk_level": "Very High" if score_int + 4 >= 76 else "High"},
-            {"time": "4 PM", "temp": int(round(env["temperature"] - 1)), "heat_risk": max(10, score_int - 13), "risk_level": "High" if score_int - 13 >= 51 else "Moderate"},
-            {"time": "7 PM", "temp": int(round(env["temperature"] - 4)), "heat_risk": max(10, score_int - 30), "risk_level": "Moderate"},
-            {"time": "10 PM", "temp": int(round(env["temperature"] - 6)), "heat_risk": max(10, score_int - 46), "risk_level": "Low"},
-            {"time": "1 AM", "temp": int(round(env["temperature"] - 8)), "heat_risk": max(10, score_int - 54), "risk_level": "Low"}
+        # Same model-driven diurnal curve as /heat-trend, not fixed offsets.
+        forecast = [{"time": "Now", "temp": int(round(env["temperature"])), "heat_risk": score_int, "risk_level": risk_level}] + [
+            {"time": p["hour"], "temp": int(round(p["temperature"])), "heat_risk": int(round(p["heat_risk"])), "risk_level": p["risk_level"]}
+            for p in heat_service.compute_hourly_trend(db, data.lat, data.lon)
         ]
 
         recommendations = [
@@ -139,18 +152,21 @@ def get_location_heat_detail(data: LocationDetailRequest, db: Session = Depends(
         warning = "High heat stress possible. Stay hydrated and avoid prolonged direct sun exposure." if score_int >= 50 else "Heat conditions are manageable. Maintain normal hydration."
 
         return LocationDetailResponse(
-            location_name=data.location_name or "SRM City Center",
+            location_name=data.location_name or "Selected Area",
             heat_risk_score=score_int,
-            risk_level="Very High Heat Risk" if score_int >= 76 else (risk_level + " Heat Risk"),
+            risk_level=risk_level + " Heat Risk",
             temperature=round(env["temperature"], 1),
             humidity=round(env["humidity"], 1),
-            uv_index_label="Extreme (9.5)" if env["uv_index"] > 8 else ("High (" + str(round(env["uv_index"], 1)) + ")"),
+            uv_index_label=f"{uv_band(env['uv_index'])} ({round(env['uv_index'], 1)})",
             vegetation_cover=f"{int(env['vegetation_index'] * 100)}%",
-            building_density="High (Dense Urban)" if env["building_density"] > 0.6 else "Moderate",
-            surface_type="Concrete / Asphalt Pavement",
+            building_density="High (Dense Urban)" if env["building_density"] > 0.6 else ("Moderate" if env["building_density"] > 0.3 else "Low"),
+            surface_type="Mostly paved / built-up" if env["building_density"] > env["vegetation_index"] else "Mostly vegetated",
             warning_message=warning,
             forecast=forecast,
-            recommendations=recommendations
+            recommendations=recommendations,
+            environment={k: round(float(v), 2) for k, v in env.items()},
+            live_weather=bool(live),
+            observed_at=live["observed_at"] if live else None,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating location heat detail: {str(e)}")

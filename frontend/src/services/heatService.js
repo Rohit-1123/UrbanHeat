@@ -9,6 +9,30 @@ import { estimateMicroclimateForCoords } from '../utils/riskCalculator';
 // hardcoded/mocked reading.
 const DEFAULT_LOCATION_ID = 'srm-campus-centroid';
 
+// Single mapping from /api/location-heat-detail to the app's location fields.
+// `vegetation_cover`/`building_density` in the response are display strings;
+// the numeric 0-1 ratios come from `detail.environment`.
+export function locationFromDetail(detail) {
+  const env = detail.environment || {};
+  const level = detail.risk_level?.replace(/ Heat Risk$/i, '');
+  return {
+    ...detail,
+    uv_index: env.uv_index,
+    vegetation_index: env.vegetation_index,
+    vegetationIndex: env.vegetation_index,
+    vegetation: env.vegetation_index > 0.6 ? 'High' : env.vegetation_index > 0.3 ? 'Moderate' : 'Low',
+    building_density: env.building_density,
+    builtUpDensity: env.building_density,
+    builtUpDensityLevel: env.building_density > 0.7 ? 'High' : env.building_density > 0.4 ? 'Moderate' : 'Low',
+    shade_score: env.shade_score,
+    recommendedAction: detail.warning_message,
+    heatRiskScore: detail.heat_risk_score,
+    heat_risk: detail.heat_risk_score,
+    riskLevel: level,
+    risk_level: level,
+  };
+}
+
 export async function fetchCurrentHeatData() {
   const [lat, lon] = SRM_CAMPUS.center;
   const base = {
@@ -23,16 +47,7 @@ export async function fetchCurrentHeatData() {
 
   try {
     const detail = await getLocationHeatDetail(lat, lon, base.area);
-    return {
-      ...base,
-      ...detail,
-      heatRiskScore: detail.heat_risk_score,
-      heat_risk: detail.heat_risk_score,
-      riskLevel: detail.risk_level?.replace(/ Heat Risk$/i, ''),
-      risk_level: detail.risk_level?.replace(/ Heat Risk$/i, ''),
-      temperature: detail.temperature,
-      humidity: detail.humidity,
-    };
+    return { ...base, ...locationFromDetail(detail) };
   } catch (err) {
     console.warn('Backend unavailable for default location, using calculated microclimate estimate:', err);
     const estimated = estimateMicroclimateForCoords(lat, lon);
@@ -54,7 +69,7 @@ export async function fetchHeatPoints() {
   return (livePoints || []).map((pt, idx) => {
     const heatRisk = pt.heat_risk;
     let heatIntensity = 'Moderate';
-    if (heatRisk > 75) heatIntensity = 'Severe';
+    if (heatRisk > 75) heatIntensity = 'Extreme';
     else if (heatRisk > 50) heatIntensity = 'High';
     else if (heatRisk > 25) heatIntensity = 'Moderate';
     else heatIntensity = 'Cool';
@@ -70,8 +85,6 @@ export async function fetchHeatPoints() {
       heat_intensity: heatIntensity,
       heatIntensity,
       temperature: pt.temperature,
-      feelsLike: pt.temperature + 5,
-      surfaceTemp: pt.temperature + 4.5,
       humidity: pt.humidity,
       uv_index: pt.uv_index,
       vegetation_index: pt.vegetation_index,
