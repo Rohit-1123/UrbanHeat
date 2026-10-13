@@ -1,23 +1,18 @@
-"""SRM Kattankulathur campus routing configuration."""
+"""Service-area bounds: all of Tamil Nadu (includes Chennai metro).
+
+Names keep the old `srm_campus` spelling so existing imports keep working.
+"""
 
 SRM_CAMPUS_BOUNDS = {
-    "min_lat": 12.8188,
-    "max_lat": 12.8280,
-    "min_lon": 80.0372,
-    "max_lon": 80.0516,
+    "min_lat": 7.9,
+    "max_lat": 13.7,
+    "min_lon": 76.1,
+    "max_lon": 80.5,
 }
 
-# Real OSRM footpath geometry near the campus edge can dip a short distance
-# outside the hand-drawn box above (verified up to ~55m south of min_lat on
-# the routed-foot service). Pad the bounds so genuine on-campus routes are not
-# rejected just because a mapped path hugs the boundary.
-_BOUNDS_MARGIN_DEG = 0.0008  # ~90m at this latitude
-
 def is_within_srm_campus(lat: float, lon: float) -> bool:
-    return (
-        SRM_CAMPUS_BOUNDS["min_lat"] - _BOUNDS_MARGIN_DEG <= lat <= SRM_CAMPUS_BOUNDS["max_lat"] + _BOUNDS_MARGIN_DEG
-        and SRM_CAMPUS_BOUNDS["min_lon"] - _BOUNDS_MARGIN_DEG <= lon <= SRM_CAMPUS_BOUNDS["max_lon"] + _BOUNDS_MARGIN_DEG
-    )
+    b = SRM_CAMPUS_BOUNDS
+    return b["min_lat"] <= lat <= b["max_lat"] and b["min_lon"] <= lon <= b["max_lon"]
 
 
 def route_geometry_is_within_srm_campus(coords: list[list[float]]) -> bool:

@@ -14,14 +14,15 @@ export async function fetchLiveWeather(lat, lon) {
     const current = data.current;
     const hourly = data.hourly;
 
-    const currentHourIndex = new Date().getHours();
+    // Open-Meteo times are in the location's own timezone, so find "now" there, not by the browser's clock.
+    const currentHourIndex = Math.max(0, hourly?.time?.indexOf(`${current.time.slice(0, 13)}:00`) ?? 0);
     const currentUV = hourly?.uv_index?.[currentHourIndex];
 
     // Format next 24 hours of forecast
     const forecast24h = [];
     if (hourly && hourly.time) {
       for (let i = currentHourIndex; i < currentHourIndex + 24 && i < hourly.time.length; i++) {
-        const timeStr = new Date(hourly.time[i]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timeStr = hourly.time[i].slice(11, 16);
         forecast24h.push({
           time: timeStr,
           temp: Math.round(hourly.temperature_2m[i]),
@@ -41,7 +42,7 @@ export async function fetchLiveWeather(lat, lon) {
       windSpeed: Math.round(current.wind_speed_10m * 10) / 10,
       uvIndex: Number.isFinite(currentUV) ? Math.round(currentUV * 10) / 10 : undefined,
       forecast24h,
-      lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      lastUpdated: current.time.slice(11, 16)
     };
   } catch (err) {
     console.warn('Open-Meteo API unreachable:', err);

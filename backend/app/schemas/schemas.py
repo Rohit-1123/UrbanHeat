@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Any, Dict
+from typing import Annotated, List, Optional, Any, Dict
 
 class HeatPredictionInput(BaseModel):
     temperature: float = Field(..., description="Temperature in Celsius (e.g. 35.0)", ge=10.0, le=55.0)
@@ -48,7 +48,7 @@ class RoutePointHeat(BaseModel):
     shade_score: Optional[float] = None
 
 class RouteHeatDetailRequest(BaseModel):
-    coordinates: List[List[float]] = Field(..., description="List of [latitude, longitude] pairs")
+    coordinates: List[Annotated[List[float], Field(min_length=2, max_length=2)]] = Field(..., description="List of [latitude, longitude] pairs")
 
 class RouteAnalysis(BaseModel):
     route_name: str

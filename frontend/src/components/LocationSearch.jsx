@@ -3,7 +3,7 @@ import { Search, MapPin, Target, ChevronRight } from 'lucide-react';
 import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
 import { searchCampusLocations } from '../services/api';
 
-const POPULAR = ['Tech Park', 'SRM Central Library', 'Main Block', 'Sports Complex', 'Dr. T.P. Ganesan Auditorium', 'Biotechnology Block'];
+const POPULAR = ['T. Nagar', 'Anna Nagar', 'Adyar', 'Velachery', 'Coimbatore', 'Madurai'];
 
 const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) => {
   const [query, setQuery] = useState('');
@@ -17,7 +17,7 @@ const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) 
     .map((place) => ({
       id: `campus-${place.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
       area: place.name,
-      city: 'SRM Kattankulathur',
+      city: 'Tamil Nadu',
       latitude: place.lat,
       longitude: place.lon,
       lat: place.lat,
@@ -60,13 +60,13 @@ const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) 
   const handleRemoteSelect = (loc) => {
     onSelectLocation({
       id: loc.id,
-      city: 'SRM Kattankulathur',
+      city: 'Tamil Nadu',
       area: loc.name,
       latitude: loc.lat,
       longitude: loc.lon,
       lat: loc.lat,
       lon: loc.lon,
-      zoneType: 'SRM Campus Location',
+      zoneType: 'Tamil Nadu location',
       source: loc.source,
     });
     setQuery('');
@@ -80,7 +80,7 @@ const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) 
         <input
           type="text"
           className="search-input"
-          placeholder="Search an SRM campus location..."
+          placeholder="Search a place in Chennai or Tamil Nadu..."
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -115,7 +115,7 @@ const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) 
       {isOpen && query.length > 0 && (
         <div className="search-dropdown">
           {searching ? (
-            <div className="dropdown-empty">Searching SRM campus places...</div>
+            <div className="dropdown-empty">Searching places...</div>
           ) : filtered.length > 0 || remoteResults.length > 0 ? (
             <>
               {remoteResults.map((loc) => (
@@ -123,7 +123,7 @@ const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) 
                   <MapPin size={16} className="item-icon" />
                   <div className="item-info">
                     <strong>{loc.name}</strong>
-                    <span>{loc.source} • SRM campus</span>
+                    <span>{loc.source} • Tamil Nadu</span>
                   </div>
                   <ChevronRight size={16} className="chevron-icon" />
                 </div>
@@ -144,7 +144,7 @@ const LocationSearch = ({ currentLocation, onSelectLocation, onUseMyLocation }) 
               ))}
             </>
           ) : (
-            <div className="dropdown-empty">No matching SRM campus place found</div>
+            <div className="dropdown-empty">No matching place found</div>
           )}
         </div>
       )}

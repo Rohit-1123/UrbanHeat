@@ -1,8 +1,18 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime
+from sqlalchemy import Column, Integer, Float, Boolean, String, DateTime
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
 Base = declarative_base()
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    is_correct = Column(Boolean, nullable=False)
+    topic = Column(String(40), nullable=False)
+    comment = Column(String(500))
+    location_name = Column(String(120))
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class HeatData(Base):
     __tablename__ = "heat_data"

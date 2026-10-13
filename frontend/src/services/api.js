@@ -86,11 +86,6 @@ export const recommendRoute = async (start_lat, start_lon, end_lat, end_lon) => 
   return response.data;
 };
 
-export const getRouteHeatDetails = async (coordinates) => {
-  const response = await apiClient.post('/api/route-heat', { coordinates });
-  return response.data;
-};
-
 export const getLocationHeatDetail = async (lat, lon, location_name = 'City Center') => {
   const response = await apiClient.post('/api/location-heat-detail', {
     lat: parseFloat(lat),
@@ -111,5 +106,10 @@ export const getRecommendations = async (lat, lon, location_name = 'Selected Are
   const response = await apiClient.get('/api/recommendations', {
     params: { lat: parseFloat(lat), lon: parseFloat(lon), location_name },
   });
+  return response.data;
+};
+
+export const submitFeedback = async (payload) => {
+  const response = await apiClient.post('/api/feedback', payload);
   return response.data;
 };

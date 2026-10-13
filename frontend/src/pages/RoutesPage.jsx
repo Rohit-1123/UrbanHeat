@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import RouteFinderView from '../components/RouteFinderView';
 import { recommendRoute } from '../services/api';
 import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
+import { getPosition, approximateNote } from '../utils/geo';
 
 const RoutesPage = ({ currentLocation }) => {
   const [startCoords, setStartCoords] = useState(SRM_CAMPUS.landmarks[0].start);
@@ -30,7 +31,7 @@ const RoutesPage = ({ currentLocation }) => {
     const requestId = ++requestIdRef.current;
 
     if (!isValidCampusCoordinate(startLat, startLon) || !isValidCampusCoordinate(endLat, endLon)) {
-      setError('Cool Routes is limited to the SRM Kattankulathur campus area. Choose pins inside the campus map.');
+      setError('Cool Routes covers Tamil Nadu only. Choose pins inside the map.');
       setRoutesData(null);
       return;
     }
@@ -51,7 +52,7 @@ const RoutesPage = ({ currentLocation }) => {
       if (requestId !== requestIdRef.current) return;
       // No placeholder routes: clear the result and show the backend's own reason.
       setRoutesData(null);
-      setError(err.friendlyMessage || 'Could not calculate a campus walking route for these points.');
+      setError(err.friendlyMessage || 'Could not calculate a walking route for these points.');
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -73,7 +74,7 @@ const RoutesPage = ({ currentLocation }) => {
       return;
     }
     if (!isWithinSrmCampus(start_lat, start_lon) || !isWithinSrmCampus(end_lat, end_lon)) {
-      setError('Both pins must be inside the SRM Kattankulathur campus area.');
+      setError('Both pins must be inside Tamil Nadu.');
       return;
     }
     setStartCoords({ lat: start_lat, lon: start_lon });
@@ -81,29 +82,30 @@ const RoutesPage = ({ currentLocation }) => {
     calculateRoutes(start_lat, start_lon, end_lat, end_lon);
   };
 
-  const handleUseLocation = (type) => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported. Place the start or destination pin on the SRM campus map.');
-      return;
+  const handleUseLocation = async (type) => {
+    try {
+      const pos = await getPosition();
+      const { latitude, longitude } = pos.coords;
+      if (!isWithinSrmCampus(latitude, longitude)) {
+        setError('Your current location is outside Tamil Nadu.');
+        return;
+      }
+      const here = { lat: latitude, lon: longitude };
+      if (type === 'start') {
+        setStartCoords(here);
+        await calculateRoutes(latitude, longitude, endCoords.lat, endCoords.lon);
+      } else {
+        setEndCoords(here);
+        await calculateRoutes(startCoords.lat, startCoords.lon, latitude, longitude);
+      }
+      const note = approximateNote(pos);
+      if (note) setError(note);
+    } catch (err) {
+      setError(err.code === 1
+        ? 'Location permission was denied. Allow location access in your browser, or place the start pin on the map.'
+        : err.code === 3 ? 'Getting your location took too long. Try again, or place the pin on the map.'
+        : `Unable to retrieve your location: ${err.message}`);
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (!isWithinSrmCampus(pos.coords.latitude, pos.coords.longitude)) {
-          setError('Your current location is outside the SRM campus routing area.');
-          return;
-        }
-        if (type === 'start') {
-          setStartCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-          calculateRoutes(pos.coords.latitude, pos.coords.longitude, endCoords.lat, endCoords.lon);
-        } else {
-          setEndCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-          calculateRoutes(startCoords.lat, startCoords.lon, pos.coords.latitude, pos.coords.longitude);
-        }
-      },
-      (err) => setError(err.code === 1
-        ? 'Location permission was denied. Allow location access in your browser, or place the start pin on the SRM map.'
-        : `Unable to retrieve your location: ${err.message}`)
-    );
   };
 
   const handleSelectPreset = (preset) => {
@@ -117,7 +119,7 @@ const RoutesPage = ({ currentLocation }) => {
       <div className="page-header">
         <h1 className="page-title">Cool Routes</h1>
         <p className="page-subtitle">
-          Walking routes across SRM campus, ranked by how much heat you'll be exposed to.
+          Walking routes across Chennai and Tamil Nadu, ranked by how much heat you'll be exposed to.
         </p>
       </div>
 
@@ -132,7 +134,7 @@ const RoutesPage = ({ currentLocation }) => {
         onSearch={handleSearch}
         onUseLocation={handleUseLocation}
         onSelectPreset={handleSelectPreset}
-        onOutsideCampusClick={() => setError('That point is outside the SRM campus boundary. Choose a point inside the campus.')}
+        onOutsideCampusClick={() => setError('That point is outside Tamil Nadu. Choose a point inside the map.')}
       />
     </div>
   );

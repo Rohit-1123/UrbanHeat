@@ -91,7 +91,7 @@ const SettingsPage = ({ themePreference, onSetThemePreference, backendStatus, on
           </div>
           {locationError && <p className="settings-hint settings-hint-error">{locationError}</p>}
           <p className="settings-hint">
-            UrbanHeat only uses your location to center the map and check whether you're inside the SRM Kattankulathur campus area. It is never stored or sent anywhere else.
+            UrbanHeat only uses your location to center the map and check whether you're inside Tamil Nadu. It is never stored or sent anywhere else.
           </p>
           <button type="button" className="settings-btn-primary" onClick={onUseMyLocation}>
             <MapPin size={16} />

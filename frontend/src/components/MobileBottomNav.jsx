@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Map, Navigation, Activity, BookOpen } from 'lucide-react';
+import { Home, Map, Navigation, Activity, BookOpen, MessageSquareWarning } from 'lucide-react';
 
 // Settings is deliberately not here — it's secondary, reachable from the
 // header's gear icon (Navbar) on every screen width instead.
@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { id: 'routes', label: 'Routes', icon: Navigation },
   { id: 'analytics', label: 'Analytics', icon: Activity },
   { id: 'insights', label: 'Guide', icon: BookOpen },
+  { id: 'feedback', label: 'Feedback', icon: MessageSquareWarning },
 ];
 
 // Fixed bottom navigation shown only on mobile widths (see .mobile-bottom-nav

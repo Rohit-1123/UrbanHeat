@@ -14,6 +14,7 @@ from app.services.ml_service import ml_service
 from app.services.weather_service import current_weather
 from app.api.heat import router as heat_router
 from app.api.routes import router as routes_router
+from app.api.feedback import router as feedback_router
 
 load_dotenv()
 
@@ -58,6 +59,7 @@ app.add_middleware(
 # Include Routers
 app.include_router(heat_router)
 app.include_router(routes_router)
+app.include_router(feedback_router)
 
 @app.get("/health", tags=["Health"])
 def health_check():

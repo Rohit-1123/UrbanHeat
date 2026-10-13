@@ -1,0 +1,362 @@
+[
+{
+"name": "T. Nagar",
+"lat": 13.0418,
+"lon": 80.2341,
+"group": "Chennai"
+},
+{
+"name": "Anna Nagar",
+"lat": 13.085,
+"lon": 80.2101,
+"group": "Chennai"
+},
+{
+"name": "Adyar",
+"lat": 13.0012,
+"lon": 80.2565,
+"group": "Chennai"
+},
+{
+"name": "Velachery",
+"lat": 12.9815,
+"lon": 80.218,
+"group": "Chennai"
+},
+{
+"name": "Guindy",
+"lat": 13.0067,
+"lon": 80.2206,
+"group": "Chennai"
+},
+{
+"name": "Tambaram",
+"lat": 12.9249,
+"lon": 80.1,
+"group": "Chennai"
+},
+{
+"name": "Chromepet",
+"lat": 12.9516,
+"lon": 80.1462,
+"group": "Chennai"
+},
+{
+"name": "Pallavaram",
+"lat": 12.9675,
+"lon": 80.1491,
+"group": "Chennai"
+},
+{
+"name": "Porur",
+"lat": 13.0382,
+"lon": 80.1565,
+"group": "Chennai"
+},
+{
+"name": "Ambattur",
+"lat": 13.1143,
+"lon": 80.1548,
+"group": "Chennai"
+},
+{
+"name": "Avadi",
+"lat": 13.1067,
+"lon": 80.097,
+"group": "Chennai"
+},
+{
+"name": "Perambur",
+"lat": 13.1186,
+"lon": 80.233,
+"group": "Chennai"
+},
+{
+"name": "Egmore",
+"lat": 13.0732,
+"lon": 80.2609,
+"group": "Chennai"
+},
+{
+"name": "Mylapore",
+"lat": 13.0368,
+"lon": 80.2676,
+"group": "Chennai"
+},
+{
+"name": "Marina Beach",
+"lat": 13.05,
+"lon": 80.2824,
+"group": "Chennai"
+},
+{
+"name": "Nungambakkam",
+"lat": 13.0569,
+"lon": 80.2425,
+"group": "Chennai"
+},
+{
+"name": "Kodambakkam",
+"lat": 13.0521,
+"lon": 80.2255,
+"group": "Chennai"
+},
+{
+"name": "Vadapalani",
+"lat": 13.05,
+"lon": 80.2121,
+"group": "Chennai"
+},
+{
+"name": "Saidapet",
+"lat": 13.0213,
+"lon": 80.2231,
+"group": "Chennai"
+},
+{
+"name": "Sholinganallur",
+"lat": 12.901,
+"lon": 80.2279,
+"group": "Chennai"
+},
+{
+"name": "Thoraipakkam",
+"lat": 12.9416,
+"lon": 80.2381,
+"group": "Chennai"
+},
+{
+"name": "Siruseri SIPCOT",
+"lat": 12.827,
+"lon": 80.227,
+"group": "Chennai"
+},
+{
+"name": "Kelambakkam",
+"lat": 12.787,
+"lon": 80.2198,
+"group": "Chennai"
+},
+{
+"name": "Medavakkam",
+"lat": 12.92,
+"lon": 80.192,
+"group": "Chennai"
+},
+{
+"name": "Perungudi",
+"lat": 12.965,
+"lon": 80.2461,
+"group": "Chennai"
+},
+{
+"name": "Besant Nagar",
+"lat": 13.0003,
+"lon": 80.2667,
+"group": "Chennai"
+},
+{
+"name": "Triplicane",
+"lat": 13.0583,
+"lon": 80.2762,
+"group": "Chennai"
+},
+{
+"name": "Royapuram",
+"lat": 13.107,
+"lon": 80.289,
+"group": "Chennai"
+},
+{
+"name": "Tondiarpet",
+"lat": 13.126,
+"lon": 80.29,
+"group": "Chennai"
+},
+{
+"name": "Ennore",
+"lat": 13.214,
+"lon": 80.32,
+"group": "Chennai"
+},
+{
+"name": "Manali",
+"lat": 13.166,
+"lon": 80.26,
+"group": "Chennai"
+},
+{
+"name": "Koyambedu",
+"lat": 13.069,
+"lon": 80.1948,
+"group": "Chennai"
+},
+{
+"name": "Chennai Airport",
+"lat": 12.9941,
+"lon": 80.1709,
+"group": "Chennai"
+},
+{
+"name": "Chennai Central",
+"lat": 13.0827,
+"lon": 80.2757,
+"group": "Chennai"
+},
+{
+"name": "Guduvanchery",
+"lat": 12.845,
+"lon": 80.06,
+"group": "Chennai"
+},
+{
+"name": "SRM Kattankulathur",
+"lat": 12.8237,
+"lon": 80.0444,
+"group": "Chennai"
+},
+{
+"name": "Poonamallee",
+"lat": 13.0473,
+"lon": 80.0945,
+"group": "Chennai"
+},
+{
+"name": "Red Hills",
+"lat": 13.19,
+"lon": 80.18,
+"group": "Chennai"
+},
+{
+"name": "Thiruvanmiyur",
+"lat": 12.983,
+"lon": 80.2594,
+"group": "Chennai"
+},
+{
+"name": "Pallikaranai",
+"lat": 12.93,
+"lon": 80.215,
+"group": "Chennai"
+},
+{
+"name": "Mahabalipuram",
+"lat": 12.6269,
+"lon": 80.1927,
+"group": "Chennai"
+},
+{
+"name": "Kanchipuram",
+"lat": 12.8342,
+"lon": 79.7036,
+"group": "Tamil Nadu"
+},
+{
+"name": "Coimbatore",
+"lat": 11.0168,
+"lon": 76.9558,
+"group": "Tamil Nadu"
+},
+{
+"name": "Madurai",
+"lat": 9.9252,
+"lon": 78.1198,
+"group": "Tamil Nadu"
+},
+{
+"name": "Tiruchirappalli",
+"lat": 10.7905,
+"lon": 78.7047,
+"group": "Tamil Nadu"
+},
+{
+"name": "Salem",
+"lat": 11.6643,
+"lon": 78.146,
+"group": "Tamil Nadu"
+},
+{
+"name": "Tirunelveli",
+"lat": 8.7139,
+"lon": 77.7567,
+"group": "Tamil Nadu"
+},
+{
+"name": "Erode",
+"lat": 11.341,
+"lon": 77.7172,
+"group": "Tamil Nadu"
+},
+{
+"name": "Vellore",
+"lat": 12.9165,
+"lon": 79.1325,
+"group": "Tamil Nadu"
+},
+{
+"name": "Thoothukudi",
+"lat": 8.7642,
+"lon": 78.1348,
+"group": "Tamil Nadu"
+},
+{
+"name": "Thanjavur",
+"lat": 10.787,
+"lon": 79.1378,
+"group": "Tamil Nadu"
+},
+{
+"name": "Tiruppur",
+"lat": 11.1085,
+"lon": 77.3411,
+"group": "Tamil Nadu"
+},
+{
+"name": "Kanyakumari",
+"lat": 8.0883,
+"lon": 77.5385,
+"group": "Tamil Nadu"
+},
+{
+"name": "Hosur",
+"lat": 12.7409,
+"lon": 77.8253,
+"group": "Tamil Nadu"
+},
+{
+"name": "Cuddalore",
+"lat": 11.748,
+"lon": 79.7714,
+"group": "Tamil Nadu"
+},
+{
+"name": "Nagercoil",
+"lat": 8.1833,
+"lon": 77.4119,
+"group": "Tamil Nadu"
+},
+{
+"name": "Dindigul",
+"lat": 10.3673,
+"lon": 77.9803,
+"group": "Tamil Nadu"
+},
+{
+"name": "Karur",
+"lat": 10.9601,
+"lon": 78.0766,
+"group": "Tamil Nadu"
+},
+{
+"name": "Rameswaram",
+"lat": 9.2876,
+"lon": 79.3129,
+"group": "Tamil Nadu"
+},
+{
+"name": "Udhagamandalam (Ooty)",
+"lat": 11.4102,
+"lon": 76.695,
+"group": "Tamil Nadu"
+}
+]

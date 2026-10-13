@@ -33,7 +33,7 @@ const SelectedLocationPanel = ({
   }
 
   const name = location.area || location.name || 'Selected Location';
-  const city = location.city || 'SRM Kattankulathur';
+  const city = location.city || 'Tamil Nadu';
   const zoneType = location.zoneType || 'Urban Microclimate Zone';
   // No invented fallbacks: missing readings render as "—". Feels-like and
   // surface temperature are derived (NOAA heat index / surface balance) only
@@ -82,7 +82,7 @@ const SelectedLocationPanel = ({
           <span className="location-type-pill">{zoneType}</span>
           <div className="timestamp-badge">
             <Clock size={12} />
-            <span>{lastUpdated ? `Updated: ${lastUpdated}` : 'Campus dataset'}</span>
+            <span>{lastUpdated ? `Updated: ${lastUpdated}` : 'Area dataset'}</span>
           </div>
         </div>
 

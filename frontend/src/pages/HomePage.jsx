@@ -5,9 +5,10 @@ import { MapPin, Navigation, Map, Loader2, RefreshCw, ArrowRight } from 'lucide-
 import { fetchLiveWeather } from '../services/weatherService';
 import { getRiskColor } from '../utils/riskCalculator';
 import { SRM_CAMPUS } from '../config/campus';
+import { istDate, istTime } from '../utils/time';
 
 const HEADLINES = {
-  Low: ['Comfortable', 'across campus right now'],
+  Low: ['Comfortable', 'across the city right now'],
   Moderate: ['Warm', 'keep to shaded paths'],
   High: ['Hot', 'limit time in direct sun'],
   Extreme: ['Extreme heat', 'avoid outdoor exertion'],
@@ -52,8 +53,8 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
         longitude: lon,
         lat,
         lon,
-        area: currentLocation?.area || 'SRM Institute Campus',
-        city: currentLocation?.city || 'SRM Kattankulathur'
+        area: currentLocation?.area || 'Chennai',
+        city: currentLocation?.city || 'Chennai'
       });
     } finally {
       setSyncingWeather(false);
@@ -69,7 +70,7 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
   const loc = currentLocation || {};
   const score = loc.heatRiskScore ?? loc.heat_risk;
   const level = loc.riskLevel ?? loc.risk_level;
-  const [headline, subline] = HEADLINES[level] || ['Checking', 'campus conditions'];
+  const [headline, subline] = HEADLINES[level] || ['Checking', 'local conditions'];
   const riskColor = getRiskColor(score ?? 0);
   const uv = loc.uvIndex ?? loc.uv_index;
   const ring = 2 * Math.PI * 21;
@@ -82,7 +83,7 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
         <div>
           <span className="sky-eyebrow">
             <MapPin size={14} />
-            {loc.area || 'SRM Kattankulathur'} · {now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} · {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {loc.area || 'Chennai'} · {istDate(now, { weekday: 'short', day: 'numeric', month: 'short' })} · {istTime(now)}
           </span>
 
           {currentLocation ? (
@@ -135,7 +136,7 @@ const HomePage = ({ currentLocation, onSelectLocation, onUseMyLocation, onNaviga
 
           <div className="sky-meta-row">
             <span className={`sky-live-dot ${loc.isLive ? '' : 'off'}`} />
-            <span>{loc.isLive ? `Live weather · ${loc.lastUpdated}` : 'Campus dataset'}</span>
+            <span>{loc.isLive ? `Live weather · ${loc.lastUpdated}` : 'Area dataset'}</span>
             <button type="button" className="sky-icon-btn" onClick={handleSyncWeather} disabled={syncingWeather} title="Sync live weather from Open-Meteo">
               <RefreshCw size={12} className={syncingWeather ? 'animate-spin' : ''} />
               {syncingWeather ? 'Syncing' : 'Sync'}

@@ -28,8 +28,8 @@ const AnalyticsPage = ({ currentLocation, initialTab = 'trends' }) => {
   const [reportModalOpen, setReportModalOpen] = useState(false);
 
   const loc = currentLocation || {
-    area: 'SRM Campus Urban Hub',
-    city: 'SRM Kattankulathur',
+    area: 'Chennai',
+    city: 'Tamil Nadu',
     temperature: 34,
     humidity: 62,
     vegetationIndex: 0.35,

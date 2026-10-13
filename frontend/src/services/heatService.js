@@ -7,7 +7,7 @@ import { estimateMicroclimateForCoords } from '../utils/riskCalculator';
 // a real backend call, or (only if the backend is unreachable) the same
 // calculated microclimate formula used elsewhere in the app — never a
 // hardcoded/mocked reading.
-const DEFAULT_LOCATION_ID = 'srm-campus-centroid';
+const DEFAULT_LOCATION_ID = 'chennai-centre';
 
 // Single mapping from /api/location-heat-detail to the app's location fields.
 // `vegetation_cover`/`building_density` in the response are display strings;
@@ -37,8 +37,8 @@ export async function fetchCurrentHeatData() {
   const [lat, lon] = SRM_CAMPUS.center;
   const base = {
     id: DEFAULT_LOCATION_ID,
-    city: 'SRM Kattankulathur',
-    area: 'SRM Institute Campus',
+    city: 'Chennai',
+    area: 'Chennai',
     latitude: lat,
     longitude: lon,
     lat,
@@ -94,7 +94,6 @@ export async function fetchHeatPoints() {
       shade_score: pt.shade_score,
       name: `Zone Point #${idx + 1}`,
       zoneType: 'Urban Microclimate Zone',
-      lastUpdated: pt.timestamp || 'Unknown'
     };
   }).filter((point) => isWithinSrmCampus(point.latitude, point.longitude));
 }

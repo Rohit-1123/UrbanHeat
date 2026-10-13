@@ -4,7 +4,7 @@ import LocationSearch from '../components/LocationSearch';
 import SelectedLocationPanel from '../components/SelectedLocationPanel';
 import HourScrubber from '../components/HourScrubber';
 import { AlertCircle } from 'lucide-react';
-import { SRM_CAMPUS, isWithinSrmCampus } from '../config/campus';
+import { SRM_CAMPUS, isWithinSrmCampus, nearestPlaceName } from '../config/campus';
 
 const HeatMapPage = ({
   currentLocation,
@@ -20,47 +20,19 @@ const HeatMapPage = ({
 
   const handleSelectLocation = (loc) => onSelectLocation?.(loc);
 
-  const handleSelectPointFromMap = (pt) => {
-    // Borrow the human-friendly place name/category from the real SRM campus
-    // place list when this heatmap point sits near a named location, but
-    // always source the actual metrics from the live heatmap point itself.
-    const matched = campusLocations.find(
-      (l) => Math.abs(l.lat - pt.latitude) < 0.005 && Math.abs(l.lon - pt.longitude) < 0.005
-    );
-
-    const target = {
-      id: `pt-${pt.id}`,
-      city: 'SRM Kattankulathur',
-      area: matched?.name || pt.name,
-      category: matched?.category,
-      lat: pt.latitude,
-      lon: pt.longitude,
-      latitude: pt.latitude,
-      longitude: pt.longitude,
-      temperature: pt.temperature,
-      heatRiskScore: pt.heat_risk,
-      heat_risk: pt.heat_risk,
-      riskLevel: pt.risk_level,
-      risk_level: pt.risk_level,
-      heatIntensity: pt.heat_intensity,
-      heat_intensity: pt.heat_intensity,
-      vegetationIndex: pt.vegetation_index,
-      vegetation_index: pt.vegetation_index,
-      vegetation: pt.vegetation,
-      builtUpDensity: pt.building_density,
-      building_density: pt.building_density,
-      builtUpDensityLevel: pt.builtUpDensityLevel,
-      humidity: pt.humidity,
-      uv_index: pt.uv_index,
-      shade_score: pt.shade_score,
-      zoneType: pt.zoneType,
-      lastUpdated: pt.lastUpdated,
-      recommendedAction: pt.heat_risk > 70
-        ? 'High thermal load zone. Seek shaded structures and hydrate frequently.'
-        : 'Microclimate stabilized by ambient ventilation or vegetation canopy.'
-    };
-
-    handleSelectLocation(target);
+  // Map tap: use the exact tapped coordinates (the backend computes the heat there).
+  const handleSelectPointFromMap = ({ lat, lon }) => {
+    if (!isWithinSrmCampus(lat, lon)) return;
+    const near = nearestPlaceName(lat, lon);
+    handleSelectLocation({
+      id: `pin-${lat.toFixed(5)}-${lon.toFixed(5)}`,
+      city: 'Tamil Nadu',
+      area: near ? `Near ${near}` : 'Dropped pin',
+      lat,
+      lon,
+      latitude: lat,
+      longitude: lon,
+    });
   };
 
   const selectedArea = currentLocation || campusLocations[0];
@@ -69,8 +41,8 @@ const HeatMapPage = ({
     <div className="page-container heatmap-page">
       <div className="page-header-row">
         <div className="page-title-group">
-          <h1 className="page-title">Campus Heat Map</h1>
-          <p className="page-subtitle">Tap anywhere on campus to inspect its heat conditions.</p>
+          <h1 className="page-title">Heat Map</h1>
+          <p className="page-subtitle">Tap anywhere in Tamil Nadu to inspect its heat conditions.</p>
         </div>
       </div>
 

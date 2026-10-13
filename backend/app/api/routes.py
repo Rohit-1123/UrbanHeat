@@ -1,3 +1,5 @@
+import requests
+from app.services.heat_service import haversine_distance
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
@@ -22,7 +24,7 @@ def recommend_route(data: RouteRequest, db: Session = Depends(get_db)):
     if not is_within_srm_campus(data.start_lat, data.start_lon) or not is_within_srm_campus(data.end_lat, data.end_lon):
         raise HTTPException(
             status_code=400,
-            detail="Cool Routes currently supports locations inside the SRM Kattankulathur campus area only."
+            detail="Cool Routes currently supports locations inside Tamil Nadu only."
         )
 
     try:
@@ -32,6 +34,8 @@ def recommend_route(data: RouteRequest, db: Session = Depends(get_db)):
         return recommendation
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    except requests.RequestException:
+        raise HTTPException(status_code=503, detail="The walking-route service is temporarily unavailable. Try again shortly.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate route recommendations: {str(e)}")
 
@@ -44,15 +48,17 @@ def analyze_route_heat_detail(data: RouteHeatDetailRequest, db: Session = Depend
         raise HTTPException(status_code=400, detail="At least two coordinate points are required.")
 
     if not route_geometry_is_within_srm_campus(data.coordinates):
-        raise HTTPException(status_code=400, detail="Route heat analysis is limited to the SRM Kattankulathur campus area.")
+        raise HTTPException(status_code=400, detail="Route heat analysis is limited to Tamil Nadu.")
 
     try:
+        coords = data.coordinates
+        dist = sum(haversine_distance(a[0], a[1], b[0], b[1]) for a, b in zip(coords, coords[1:]))
         analysis = route_service.analyze_route_heat(
             db,
             data.coordinates,
             "Custom Route Path",
             "custom",
-            distance_km=0.0,
+            distance_km=round(dist, 2),
             duration_min=0.0
         )
         return analysis

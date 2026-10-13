@@ -77,7 +77,7 @@ class HeatService:
         Evaluates heat risk at any coordinate.
         Queries database first; if absent, interpolates environmental features and uses ML prediction model.
         """
-        nearest_db = HeatService.find_nearest_db_heat_point(db, lat, lon, max_dist_km=1.5)
+        nearest_db = HeatService.find_nearest_db_heat_point(db, lat, lon, max_dist_km=6.0)
 
         if nearest_db:
             env_data = {
@@ -90,17 +90,9 @@ class HeatService:
             }
             return nearest_db.heat_risk, nearest_db.risk_level, env_data
 
-        # Fallback spatial interpolation for coordinates outside database grid
-        dist_from_urban = math.sqrt((lat - 12.823)**2 + (lon - 80.045)**2)
-        dist_from_green = math.sqrt((lat - 12.815)**2 + (lon - 80.030)**2)
-
-        building_density = float(np.clip(0.85 - dist_from_urban * 8.0, 0.1, 0.95))
-        vegetation_index = float(np.clip(0.80 - dist_from_green * 7.0, 0.05, 0.90))
-        shade_score = float(np.clip(vegetation_index * 0.7, 0.05, 0.85))
-
-        temperature = float(round(33.0 + building_density * 5.5 - vegetation_index * 3.0, 1))
-        humidity = 60.0
-        uv_index = float(round(7.5 + building_density * 1.5 - shade_score * 1.0, 1))
+        # Outside every seeded area: neutral semi-rural values.
+        building_density, vegetation_index, shade_score = 0.2, 0.5, 0.35
+        temperature, humidity, uv_index = 33.0, 60.0, 7.5
 
         risk_score, risk_level = ml_service.predict(
             temperature, humidity, uv_index, vegetation_index, building_density, shade_score

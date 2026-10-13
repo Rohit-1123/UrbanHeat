@@ -1,117 +1,49 @@
-"""Heat-aware walking routes over the SRM campus path network.
+"""Heat-aware walking routes across Chennai metro / Tamil Nadu.
 
-The network (data/campus_paths.json, from OpenStreetMap via
-scripts/build_campus_graph.py) is routed in-process with Dijkstra, so routes
-never leave campus and need no external routing service. Each edge costs
-    length * (1 + alpha * heat_risk / 100)
-with alpha = 0 (fastest), 1.5 (balanced) and 4 (coolest). When the map only
-has one sensible path, the three options honestly come back identical.
+The public OSRM foot service proposes up to 3 alternative walking routes; each
+is scored with the seeded heat data along its geometry. Fastest = shortest,
+coolest = lowest average heat, balanced = best blended score. When OSRM only
+returns one sensible path, the three options honestly come back identical.
 """
-import heapq
-import json
 import math
-import os
-import threading
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+import requests
 from sqlalchemy.orm import Session
 
-from app.database.models import HeatData
 from app.services.heat_service import heat_service, haversine_distance
 
-GRAPH_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "campus_paths.json")
+OSRM_URL = "https://routing.openstreetmap.de/routed-foot/route/v1/foot"
 WALKING_SPEED_M_PER_MIN = 80.0  # ~4.8 km/h
-MAX_SNAP_M = 250.0
-ROUTE_PROFILES = {"fastest": 0.0, "balanced": 1.5, "coolest": 4.0}
+MAX_SNAP_M = 500.0
+MAX_STRAIGHT_KM = 50.0
+MAX_SAMPLES = 24
+MAX_DETOUR = 1.2  # a cooler route may be at most 20% longer than the shortest
 
 
-def _meters(a, b) -> float:
-    return haversine_distance(a[0], a[1], b[0], b[1]) * 1000.0
-
-
-class CampusGraph:
-    def __init__(self, db: Session):
-        with open(GRAPH_PATH, encoding="utf-8") as f:
-            raw = json.load(f)
-        self.nodes = {int(k): tuple(v) for k, v in raw["nodes"].items()}
-        self.adj: Dict[int, List[tuple]] = {}
-        for way in raw["ways"]:
-            label = way["name"] or {"footway": "footpath", "path": "path", "steps": "steps"}.get(way["highway"], "campus road")
-            for a, b in zip(way["nodes"], way["nodes"][1:]):
-                length = _meters(self.nodes[a], self.nodes[b])
-                self.adj.setdefault(a, []).append((b, length, label))
-                self.adj.setdefault(b, []).append((a, length, label))
-
-        # Route only on the largest connected component; small islands are
-        # disconnected service lanes that can't reach anything.
-        self.main = max(self._components(), key=len)
-
-        # Heat at each node = nearest seeded heat point (static dataset).
-        pts = [(p.latitude, p.longitude, p.heat_risk) for p in db.query(HeatData).all()]
-        self.heat = {
-            n: min(pts, key=lambda p: (p[0] - lat) ** 2 + (p[1] - lon) ** 2)[2] if pts else 50.0
-            for n, (lat, lon) in self.nodes.items() if n in self.adj
-        }
-
-    def _components(self):
-        seen = set()
-        for start in self.adj:
-            if start in seen:
-                continue
-            comp, stack = {start}, [start]
-            while stack:
-                for nxt, _, _ in self.adj[stack.pop()]:
-                    if nxt not in comp:
-                        comp.add(nxt)
-                        stack.append(nxt)
-            seen |= comp
-            yield comp
-
-    def nearest(self, lat: float, lon: float) -> tuple[int, float]:
-        # ponytail: linear scan over ~600 nodes; add a grid index if the graph grows 100x.
-        node = min(self.main, key=lambda n: _meters((lat, lon), self.nodes[n]))
-        return node, _meters((lat, lon), self.nodes[node])
-
-    def shortest(self, source: int, target: int, alpha: float) -> List[tuple]:
-        """Dijkstra; returns [(node, label_of_edge_into_node)]."""
-        dist = {source: 0.0}
-        prev: Dict[int, tuple] = {}
-        queue = [(0.0, source)]
-        while queue:
-            cost, node = heapq.heappop(queue)
-            if node == target:
-                break
-            if cost > dist[node]:
-                continue
-            for nxt, length, label in self.adj[node]:
-                heat = (self.heat[node] + self.heat[nxt]) / 200.0
-                new_cost = cost + length * (1.0 + alpha * heat)
-                if new_cost < dist.get(nxt, math.inf):
-                    dist[nxt] = new_cost
-                    prev[nxt] = (node, label)
-                    heapq.heappush(queue, (new_cost, nxt))
-        if target not in dist:
-            raise ValueError("These two points are not connected by any mapped campus path.")
-        path = [(target, prev.get(target, (None, ""))[1])]
-        while path[-1][0] != source:
-            node = prev[path[-1][0]][0]
-            path.append((node, prev.get(node, (None, ""))[1]))
-        path.reverse()
-        return path
-
-
-_graph: Optional[CampusGraph] = None
-_graph_lock = threading.Lock()
-
-
-def get_graph(db: Session) -> CampusGraph:
-    # ponytail: built once per process; restart the API after re-seeding heat data.
-    global _graph
-    with _graph_lock:
-        if _graph is None:
-            _graph = CampusGraph(db)
-        return _graph
+@lru_cache(maxsize=128)
+def _osrm_routes(start_lat: float, start_lon: float, end_lat: float, end_lon: float, via: Optional[tuple] = None):
+    """Alternatives as [(coords[[lat,lon]], steps[(name, meters)])] plus snap distances."""
+    resp = requests.get(
+        f"{OSRM_URL}/{start_lon},{start_lat};" + (f"{via[1]},{via[0]};" if via else "") + f"{end_lon},{end_lat}",
+        params={"alternatives": "false" if via else "3", "overview": "full", "geometries": "geojson", "steps": "true"},
+        headers={"User-Agent": "UrbanHeat-TN/1.0"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("code") != "Ok" or not data.get("routes"):
+        raise ValueError("No walking route was found between these two points.")
+    routes = [
+        ([[lat, lon] for lon, lat in r["geometry"]["coordinates"]],
+         [(st.get("name") or "footpath", st["distance"]) for leg in r["legs"] for st in leg["steps"] if st["distance"] > 0])
+        for r in data["routes"]
+    ]
+    snaps = tuple(w.get("distance", 0.0) for w in data["waypoints"])
+    return routes, snaps
 
 
 def _directions(segments: List[tuple]) -> List[Dict[str, str]]:
@@ -147,8 +79,9 @@ class RouteService:
         distance_km: float,
         duration_min: float,
         turn_by_turn: Optional[List[Dict[str, str]]] = None,
+        max_samples: int = 16,
     ) -> Dict[str, Any]:
-        sampled = RouteService.sample_points_along_route(coords, max_samples=16)
+        sampled = RouteService.sample_points_along_route(coords, max_samples=max_samples)
 
         sampled_heat_points = []
         heat_scores = []
@@ -191,33 +124,66 @@ class RouteService:
 
     @staticmethod
     def process_and_recommend_routes(db: Session, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
-        graph = get_graph(db)
-        source, start_snap = graph.nearest(start_lat, start_lon)
-        target, end_snap = graph.nearest(end_lat, end_lon)
-        if max(start_snap, end_snap) > MAX_SNAP_M:
-            raise ValueError("No mapped campus path runs near one of these pins. Move it closer to a road or footpath.")
-        if source == target:
-            raise ValueError("Both pins snap to the same point on the path network. Pick places further apart.")
+        if haversine_distance(start_lat, start_lon, end_lat, end_lon) > MAX_STRAIGHT_KM:
+            raise ValueError(f"Walking routes are limited to {MAX_STRAIGHT_KM:.0f} km between the two points. Pick places closer together.")
+        # Rounded to ~1 m so repeat requests hit the cache.
+        start_lat, start_lon, end_lat, end_lon = (round(v, 5) for v in (start_lat, start_lon, end_lat, end_lon))
+        # OSRM often returns a single path, so also try detours through a point
+        # pushed sideways of the midpoint (both sides) to give the heat search real choices.
+        # ponytail: 2 fixed detours; add more offsets if choice matters.
+        cos_lat = math.cos(math.radians((start_lat + end_lat) / 2))
+        dlat, dlon = end_lat - start_lat, (end_lon - start_lon) * cos_lat
+        vias = [None] + [
+            (round((start_lat + end_lat) / 2 - side * 0.2 * dlon, 5),
+             round((start_lon + end_lon) / 2 + side * 0.2 * dlat / cos_lat, 5))
+            for side in (1, -1)
+        ]
 
-        routes: Dict[str, Dict[str, Any]] = {}
-        paths = set()
-        for route_type, alpha in ROUTE_PROFILES.items():
-            path = graph.shortest(source, target, alpha)
-            nodes = [n for n, _ in path]
-            paths.add(tuple(nodes))
-            coords = [list(graph.nodes[n]) for n in nodes]
-            edges = [(label, _meters(graph.nodes[a], graph.nodes[b])) for (a, _), (b, label) in zip(path, path[1:])]
-            meters = sum(length for _, length in edges)
+        def fetch(via):
+            try:
+                return _osrm_routes(start_lat, start_lon, end_lat, end_lon, via)
+            except (ValueError, requests.RequestException):
+                if via is None:
+                    raise
+                return [], ()
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            results = list(pool.map(fetch, vias))
+        osrm, snaps = results[0]
+        shortest_m = min(sum(l for _, l in steps) for _, steps in osrm)
+        for extra, _ in results[1:]:
+            osrm = osrm + [r for r in extra if sum(l for _, l in r[1]) <= MAX_DETOUR * shortest_m]
+        start_snap, end_snap = snaps[0], snaps[-1]
+        if max(start_snap, end_snap) > MAX_SNAP_M:
+            raise ValueError("No walkable path runs near one of these pins. Move it closer to a road or footpath.")
+
+        analysed = []
+        for coords, steps in osrm:
+            meters = sum(length for _, length in steps)
             route = RouteService.analyze_route_heat(
-                db, coords, f"{route_type.title()} Route", route_type,
-                meters / 1000.0, meters / WALKING_SPEED_M_PER_MIN, _directions(edges),
+                db, coords, "", "", meters / 1000.0, meters / WALKING_SPEED_M_PER_MIN, _directions(steps),
+                max_samples=MAX_SAMPLES,
             )
+            # One heat value per geometry segment, taken from the nearest sampled point.
+            n_seg = len(coords) - 1
+            scores = [p["score"] for p in route["heat_profile"]]
             route["heat_segments"] = [
-                {"coords": [list(graph.nodes[a]), list(graph.nodes[b])],
-                 "heat_risk": round((graph.heat[a] + graph.heat[b]) / 2, 1)}
-                for a, b in zip(nodes, nodes[1:])
+                {"coords": [coords[i], coords[i + 1]],
+                 "heat_risk": scores[round(i / max(n_seg - 1, 1) * (len(scores) - 1))]}
+                for i in range(n_seg)
             ]
-            routes[route_type] = route
+            analysed.append(route)
+
+        picks = {
+            "fastest": min(analysed, key=lambda r: r["distance_km"]),
+            "coolest": min(analysed, key=lambda r: r["average_heat_risk"]),
+        }
+        picks["balanced"] = min(
+            analysed, key=lambda r: r["average_heat_risk"] / 100.0 + r["distance_km"] / (picks["fastest"]["distance_km"] or 1.0) * 0.5
+        )
+        routes: Dict[str, Dict[str, Any]] = {}
+        for route_type, r in picks.items():
+            routes[route_type] = {**r, "route_name": f"{route_type.title()} Route", "route_type": route_type}
 
         max_dist = max(r["distance_km"] for r in routes.values()) or 1.0
         max_dur = max(r["duration_minutes"] for r in routes.values()) or 1.0
@@ -233,7 +199,7 @@ class RouteService:
         summary = (
             f"The coolest route lowers average heat exposure by {heat_reduction} points {cost}."
             if heat_reduction > 0 else
-            "Every mapped path between these points has similar heat exposure, so the fastest one is also the coolest."
+            "No alternative walking route is cooler than the fastest one here, so the fastest is also the coolest."
         )
 
         return {
@@ -244,8 +210,8 @@ class RouteService:
             "comparison": {
                 "heat_reduction_points": heat_reduction,
                 "extra_time_minutes": extra_time,
-                "mapped_route_count": len(paths),
-                "alternatives_available": len(paths) > 1,
+                "mapped_route_count": len(analysed),
+                "alternatives_available": len(analysed) > 1,
                 "start_snap_distance_m": round(start_snap, 1),
                 "end_snap_distance_m": round(end_snap, 1),
                 "pins_snapped": start_snap > 2.0 or end_snap > 2.0,

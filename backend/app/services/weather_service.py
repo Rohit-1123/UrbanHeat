@@ -1,7 +1,5 @@
-"""Current campus weather from Open-Meteo, cached so every request doesn't hit it.
-
-The campus is ~1.5 km across, so one reading at the centre stands in for all
-of it. Returns None when disabled (LIVE_WEATHER=0, e.g. in tests) or when
+"""Current weather from Open-Meteo, cached per ~10 km cell so every request doesn't hit it.
+ Returns None when disabled (LIVE_WEATHER=0, e.g. in tests) or when
 Open-Meteo is unreachable; callers then fall back to the seeded dataset.
 """
 import os
@@ -12,25 +10,26 @@ from typing import Optional
 
 import requests
 
-CAMPUS_CENTER = (12.8237, 80.0444)
 CACHE_SECONDS = 600
 
-_cache: dict = {"at": 0.0, "data": None}
+_cache: dict = {}
 _lock = threading.Lock()
 
 
-def current_weather() -> Optional[dict]:
+def current_weather(lat: float = 13.0827, lon: float = 80.2707) -> Optional[dict]:
     if os.getenv("LIVE_WEATHER", "1") == "0":
         return None
+    key = (round(lat, 1), round(lon, 1))
     with _lock:
-        if time.monotonic() - _cache["at"] < CACHE_SECONDS:
-            return _cache["data"]
+        hit = _cache.get(key)
+        if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
+            return hit[1]
         try:
             resp = requests.get(
                 "https://api.open-meteo.com/v1/forecast",
                 params={
-                    "latitude": CAMPUS_CENTER[0],
-                    "longitude": CAMPUS_CENTER[1],
+                    "latitude": lat,
+                    "longitude": lon,
                     "current": "temperature_2m,relative_humidity_2m,uv_index",
                     "timezone": "Asia/Kolkata",
                 },
@@ -47,5 +46,5 @@ def current_weather() -> Optional[dict]:
         except (requests.RequestException, KeyError, TypeError, ValueError):
             data = None
         # Failures are cached for the same TTL so an outage doesn't add 4s to every request.
-        _cache.update(at=time.monotonic(), data=data)
+        _cache[key] = (time.monotonic(), data)
         return data

@@ -29,7 +29,7 @@ def test_health_check():
     assert body == {"status": "running", "service": "Urban Heat Risk Prediction API"}
 
 
-def test_heatmap_returns_list_within_campus_bounds():
+def test_heatmap_returns_list_within_region_bounds():
     response = client.get("/api/heatmap")
     assert response.status_code == 200
     body = response.json()
@@ -37,9 +37,9 @@ def test_heatmap_returns_list_within_campus_bounds():
     for point in body:
         assert "latitude" in point and "longitude" in point
         assert "heat_risk" in point and "risk_level" in point
-        # SRM KTR campus bounding box (app/services/campus_config.py)
-        assert 12.8188 <= point["latitude"] <= 12.8280
-        assert 80.0372 <= point["longitude"] <= 80.0516
+        # Tamil Nadu bounding box (app/services/campus_config.py)
+        assert 7.9 <= point["latitude"] <= 13.7
+        assert 76.1 <= point["longitude"] <= 80.5
 
 
 def test_heatmap_respects_custom_bounding_box():
@@ -92,10 +92,10 @@ def test_predict_heat_rejects_out_of_range_input():
 
 
 def test_location_heat_detail_requires_campus_coordinates():
-    # Well outside the SRM KTR bounding box.
+    # Mumbai: well outside the Tamil Nadu bounding box.
     response = client.post(
         "/api/location-heat-detail",
-        json={"lat": 13.0827, "lon": 80.2707, "location_name": "Chennai Central"},
+        json={"lat": 19.076, "lon": 72.877, "location_name": "Mumbai"},
     )
     assert response.status_code == 400
 
@@ -121,8 +121,8 @@ def test_recommend_route_rejects_identical_points():
     assert response.status_code == 400
 
 
-def test_recommend_route_rejects_points_outside_campus():
-    payload = {"start_lat": 12.823, "start_lon": 80.0445, "end_lat": 13.0827, "end_lon": 80.2707}
+def test_recommend_route_rejects_points_outside_region():
+    payload = {"start_lat": 13.0827, "start_lon": 80.2707, "end_lat": 19.076, "end_lon": 72.877}
     response = client.post("/api/recommend-route", json=payload)
     assert response.status_code == 400
 
@@ -132,10 +132,10 @@ def test_route_heat_requires_at_least_two_coordinates():
     assert response.status_code == 400
 
 
-def test_route_heat_rejects_coordinates_outside_campus():
+def test_route_heat_rejects_coordinates_outside_region():
     response = client.post(
         "/api/route-heat",
-        json={"coordinates": [[12.823, 80.0445], [13.0827, 80.2707]]},
+        json={"coordinates": [[13.0827, 80.2707], [19.076, 72.877]]},
     )
     assert response.status_code == 400
 
@@ -152,18 +152,34 @@ def test_route_heat_analyzes_a_valid_campus_path():
     assert 0 <= body["average_heat_risk"] <= 100
 
 
-def test_recommend_route_uses_campus_graph():
-    # Library -> Sports Complex: routed in-process over the committed OSM path graph.
-    payload = {"start_lat": 12.8233, "start_lon": 80.0426, "end_lat": 12.8250, "end_lon": 80.0470}
+def test_recommend_route_picks_coolest_of_osrm_alternatives(monkeypatch):
+    # Two fake alternatives (no network): a short straight one and a longer detour.
+    straight = ([[13.04, 80.23], [13.05, 80.23], [13.06, 80.23]], [("Road A", 1100.0), ("Road B", 1100.0)])
+    detour = ([[13.04, 80.23], [13.05, 80.26], [13.06, 80.23]], [("Road C", 3000.0)])
+    monkeypatch.setattr(
+        "app.services.route_service._osrm_routes",
+        lambda *a: ([straight, detour], (1.0, 1.0)) if len(a) == 4 or a[4] is None else ([], ()),
+    )
+    payload = {"start_lat": 13.04, "start_lon": 80.23, "end_lat": 13.06, "end_lon": 80.23}
     response = client.post("/api/recommend-route", json=payload)
     assert response.status_code == 200
     body = response.json()
     for key in ("coolest_route", "balanced_route", "fastest_route"):
         route = body[key]
         assert route["distance_km"] > 0 and route["duration_minutes"] > 0
-        assert len(route["geometry"]) >= 2
         assert len(route["heat_segments"]) == len(route["geometry"]) - 1
         assert route["turn_by_turn"][-1]["instruction"] == "Arrive at your destination"
-    # Coolest is never hotter than fastest, fastest never longer than coolest.
-    assert body["coolest_route"]["average_heat_risk"] <= body["fastest_route"]["average_heat_risk"] + 0.5
-    assert body["fastest_route"]["distance_km"] <= body["coolest_route"]["distance_km"]
+    assert body["fastest_route"]["distance_km"] == 2.2
+    assert body["coolest_route"]["average_heat_risk"] <= body["fastest_route"]["average_heat_risk"]
+    assert body["comparison"]["mapped_route_count"] == 2
+
+
+def test_areas_json_matches_frontend_copy():
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    assert (root / "backend/data/areas.json").read_text() == (root / "frontend/src/config/areas.json").read_text()
+
+
+def test_feedback_rejects_unknown_topic():
+    r = client.post("/api/feedback", json={"is_correct": True, "topic": "bogus"})
+    assert r.status_code == 422

@@ -1,3 +1,4 @@
+import { istTime } from '../utils/time';
 import React from 'react';
 import { X, Printer, Download, ShieldCheck, Thermometer, Droplets, TreeDeciduous, Building, AlertTriangle, Calendar, MapPin, CheckCircle2 } from 'lucide-react';
 import { calculateHeatRisk, getRiskColor } from '../utils/riskCalculator';
@@ -6,8 +7,8 @@ const ExportReportModal = ({ isOpen, onClose, locationData }) => {
   if (!isOpen) return null;
 
   const loc = locationData || {
-    area: 'SRM Campus Urban Hub',
-    city: 'SRM Kattankulathur',
+    area: 'Chennai',
+    city: 'Tamil Nadu',
     temperature: 34,
     humidity: 62,
     vegetationIndex: 0.35,
@@ -26,12 +27,13 @@ const ExportReportModal = ({ isOpen, onClose, locationData }) => {
 
   const riskColor = getRiskColor(riskResult.score);
   const reportDate = new Date().toLocaleDateString('en-US', {
+    timeZone: 'Asia/Kolkata',
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   });
-  const reportTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const reportTime = istTime();
 
   const handlePrint = () => {
     window.print();

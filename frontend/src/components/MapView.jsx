@@ -68,7 +68,7 @@ const MapView = ({
     <div className="desktop-map-center-container">
       <MapContainer
         center={SRM_CAMPUS.center}
-        zoom={16}
+        zoom={11}
         className="leaflet-map-wrapper"
         scrollWheelZoom
         maxBounds={SRM_CAMPUS.bounds}

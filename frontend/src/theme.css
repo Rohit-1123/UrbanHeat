@@ -757,6 +757,14 @@ input[type='text'], input[type='search'], input[type='number'] {
   .route-map-frame { height: 52vh; }
 }
 
+@media (max-width: 520px) {
+  .route-options { grid-template-columns: 1fr; }
+  .route-option { flex-direction: row; justify-content: space-between; align-items: center; }
+  .route-directions-btn { align-self: stretch; justify-content: center; }
+  .route-map-frame { height: 46vh; border-radius: var(--radius-md, 14px); }
+  .route-steps li { flex-wrap: wrap; }
+}
+
 /* ==========================================================================
    Heat Map: hour scrubber
    ========================================================================== */
@@ -829,3 +837,31 @@ input[type='text'], input[type='search'], input[type='number'] {
   .alert-btn-details, .btn-location-geo, .preset-chip, .journey-place { min-height: 40px; min-width: 40px; }
   input, select, textarea { font-size: 16px; }
 }
+
+.journey-input {
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  outline: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.98rem;
+}
+.journey-input::placeholder { color: var(--text-primary); opacity: 1; }
+.journey-input:focus::placeholder { color: var(--text-muted); }
+
+/* Feedback page */
+.feedback-page form { display: flex; flex-direction: column; gap: 12px; max-width: 520px; }
+.feedback-verdict { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.feedback-choice { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px;
+  border: 2px solid var(--border); border-radius: 12px; background: var(--surface-solid); color: var(--text-primary); font: inherit; font-weight: 600; cursor: pointer; }
+.feedback-choice.active.yes { border-color: #1f9d55; background: rgba(31, 157, 85, .12); }
+.feedback-choice.active.no { border-color: #d64545; background: rgba(214, 69, 69, .12); }
+.feedback-label { font-size: .85rem; font-weight: 600; }
+.feedback-field { width: 100%; box-sizing: border-box; padding: 12px; font: inherit; font-size: 16px; /* 16px stops iOS zoom */
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-solid); color: var(--text-primary); }
+.feedback-submit { min-height: 48px; padding: 0 20px; border: 0; border-radius: 12px; font: inherit; font-weight: 600;
+  background: var(--primary); color: var(--primary-contrast); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.feedback-submit:disabled { opacity: .5; cursor: not-allowed; }
+.feedback-error { color: #d64545; margin: 0; }

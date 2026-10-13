@@ -3,6 +3,7 @@ import {
   MapContainer,
   TileLayer,
   CircleMarker,
+  Circle,
   useMap,
   useMapEvents
 } from 'react-leaflet';
@@ -22,19 +23,12 @@ L.Icon.Default.mergeOptions({
 const MapController = ({ centerLocation, allPoints, resetTrigger }) => {
   const map = useMap();
 
+  const lat = centerLocation?.lat ?? centerLocation?.latitude;
+  const lon = centerLocation?.lon ?? centerLocation?.longitude;
+  // Keyed on coordinates, not the object, so data refreshes don't restart the fly-to.
   useEffect(() => {
-    if (centerLocation?.lat && centerLocation?.lon) {
-      map.flyTo([centerLocation.lat, centerLocation.lon], 14, {
-        duration: 1.2,
-        easeLinearity: 0.25
-      });
-    } else if (centerLocation?.latitude && centerLocation?.longitude) {
-      map.flyTo([centerLocation.latitude, centerLocation.longitude], 14, {
-        duration: 1.2,
-        easeLinearity: 0.25
-      });
-    }
-  }, [centerLocation, map]);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) map.flyTo([lat, lon], 14, { duration: 1.2, easeLinearity: 0.25 });
+  }, [lat, lon, map]);
 
   useEffect(() => {
     if (resetTrigger && allPoints && allPoints.length > 0) {
@@ -97,23 +91,11 @@ const CustomMapControls = ({ onResetView, onUseMyLocation }) => {
   );
 };
 
-// Clicking anywhere on campus selects the nearest heat data point.
-const HeatClickHandler = ({ points, onSelectPoint }) => {
+// Clicking selects exactly the clicked spot; the backend returns the heat at those coordinates.
+const HeatClickHandler = ({ onSelectPoint }) => {
   useMapEvents({
     click(e) {
-      if (!onSelectPoint || !points || points.length === 0) return;
-      let nearest = null;
-      let minDist = Infinity;
-      for (const pt of points) {
-        const lat = pt.latitude ?? pt.lat;
-        const lon = pt.longitude ?? pt.lon;
-        const dist = (lat - e.latlng.lat) ** 2 + (lon - e.latlng.lng) ** 2;
-        if (dist < minDist) {
-          minDist = dist;
-          nearest = pt;
-        }
-      }
-      if (nearest) onSelectPoint(nearest);
+      onSelectPoint?.({ lat: e.latlng.lat, lon: e.latlng.lng });
     }
   });
   return null;
@@ -149,7 +131,7 @@ const InteractiveHeatMap = ({
     <div className="interactive-heatmap-wrapper">
       <MapContainer
         center={defaultCenter}
-        zoom={12}
+        zoom={11}
         className="leaflet-interactive-map-root"
         zoomControl={false}
         scrollWheelZoom={true}
@@ -175,7 +157,7 @@ const InteractiveHeatMap = ({
           resetTrigger={resetTrigger}
         />
 
-        <HeatClickHandler points={points} onSelectPoint={onSelectPoint} />
+        <HeatClickHandler onSelectPoint={onSelectPoint} />
 
         {/* Prominent Highlighting Ring for Selected Location */}
         {(selectedLocation || centerLocation) && (
@@ -193,6 +175,14 @@ const InteractiveHeatMap = ({
               dashArray: '3, 3',
               opacity: 0.95
             }}
+          />
+        )}
+        {/* GPS fix uncertainty: the real position is somewhere inside this circle. */}
+        {selectedLocation?.accuracy > 0 && (
+          <Circle
+            center={[selectedLocation.lat ?? selectedLocation.latitude, selectedLocation.lon ?? selectedLocation.longitude]}
+            radius={selectedLocation.accuracy}
+            pathOptions={{ color: '#2a63c9', weight: 1, fillOpacity: 0.12 }}
           />
         )}
       </MapContainer>

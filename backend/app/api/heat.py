@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 import requests
 from sqlalchemy.orm import Session
+from functools import lru_cache
 from typing import List, Optional
 
 from app.database.connection import get_db
@@ -25,44 +26,42 @@ def uv_band(uv: float) -> str:
     if uv >= 3: return "Moderate"
     return "Low"
 
+@lru_cache(maxsize=256)
+def _nominatim_search(q: str):
+    # ponytail: no TTL (lru only), failures aren't cached; add expiry if OSM data changes matter
+    bounds = SRM_CAMPUS_BOUNDS
+    viewbox = f"{bounds['min_lon']},{bounds['max_lat']},{bounds['max_lon']},{bounds['min_lat']}"
+    response = requests.get(
+        "https://nominatim.openstreetmap.org/search",
+        params={"q": q, "countrycodes": "in", "format": "jsonv2", "addressdetails": 1, "limit": 8, "bounded": 1, "viewbox": viewbox},
+        headers={"User-Agent": "UrbanHeat-TN/1.0"},
+        timeout=8,
+    )
+    response.raise_for_status()
+    results = []
+    for item in response.json():
+        lat = float(item["lat"])
+        lon = float(item["lon"])
+        if is_within_srm_campus(lat, lon):
+            results.append({
+                "id": f"osm-{item.get('osm_type', 'place')}-{item.get('osm_id', item.get('place_id'))}",
+                "name": item.get("display_name", "Tamil Nadu location").split(",")[0],
+                "display_name": item.get("display_name", "Tamil Nadu location"),
+                "lat": lat,
+                "lon": lon,
+                "source": "OpenStreetMap",
+            })
+    return results
+
 @router.get("/location-search")
 def search_campus_locations(
     q: str = Query(..., min_length=2, max_length=80),
 ):
-    """Search mapped SRM campus places through Nominatim, never the wider city."""
-    bounds = SRM_CAMPUS_BOUNDS
-    viewbox = f"{bounds['min_lon']},{bounds['max_lat']},{bounds['max_lon']},{bounds['min_lat']}"
+    """Search places in Tamil Nadu (incl. Chennai metro) through Nominatim."""
     try:
-        response = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={
-                "q": q,
-                "format": "jsonv2",
-                "addressdetails": 1,
-                "limit": 8,
-                "bounded": 1,
-                "viewbox": viewbox,
-            },
-            headers={"User-Agent": "UrbanHeat-SRM-Campus/1.0"},
-            timeout=8,
-        )
-        response.raise_for_status()
-        results = []
-        for item in response.json():
-            lat = float(item["lat"])
-            lon = float(item["lon"])
-            if is_within_srm_campus(lat, lon):
-                results.append({
-                    "id": f"osm-{item.get('osm_type', 'place')}-{item.get('osm_id', item.get('place_id'))}",
-                    "name": item.get("display_name", "SRM campus location").split(",")[0],
-                    "display_name": item.get("display_name", "SRM campus location"),
-                    "lat": lat,
-                    "lon": lon,
-                    "source": "OpenStreetMap",
-                })
-        return results
+        return _nominatim_search(q.strip().lower())
     except requests.RequestException as exc:
-        raise HTTPException(status_code=503, detail=f"Campus location search is temporarily unavailable: {exc}")
+        raise HTTPException(status_code=503, detail=f"Location search is temporarily unavailable: {exc}")
 
 @router.post("/predict-heat", response_model=HeatPredictionOutput)
 def predict_heat(data: HeatPredictionInput):
@@ -125,13 +124,13 @@ def get_location_heat_detail(data: LocationDetailRequest, db: Session = Depends(
     Provides detailed microclimate metrics, gauge score, hourly forecast, and health advisories for any location.
     """
     if not is_within_srm_campus(data.lat, data.lon):
-        raise HTTPException(status_code=400, detail="Heat analysis is limited to the SRM Kattankulathur campus area.")
+        raise HTTPException(status_code=400, detail="Heat analysis is limited to Tamil Nadu.")
 
     try:
         score, risk_level, env = heat_service.evaluate_coordinate_heat_risk(db, data.lat, data.lon)
         # Live Open-Meteo conditions replace the dataset's static weather; the
         # location's own land-cover factors (vegetation/buildings/shade) stay.
-        live = current_weather()
+        live = current_weather(data.lat, data.lon)
         if live:
             env = {**env, "temperature": live["temperature"], "humidity": live["humidity"], "uv_index": live["uv_index"]}
             score, risk_level = ml_service.predict(**env)
@@ -184,7 +183,7 @@ def get_heat_trend(
     static mocked chart.
     """
     if not is_within_srm_campus(lat, lon):
-        raise HTTPException(status_code=400, detail="Heat trend analysis is limited to the SRM Kattankulathur campus area.")
+        raise HTTPException(status_code=400, detail="Heat trend analysis is limited to Tamil Nadu.")
 
     try:
         points = heat_service.compute_hourly_trend(db, lat, lon)
@@ -210,7 +209,7 @@ def get_recommendations(
     environmental risk factors, instead of a static recommendation list.
     """
     if not is_within_srm_campus(lat, lon):
-        raise HTTPException(status_code=400, detail="Recommendations are limited to the SRM Kattankulathur campus area.")
+        raise HTTPException(status_code=400, detail="Recommendations are limited to Tamil Nadu.")
 
     try:
         score, risk_level, recommendations = heat_service.build_recommendations(db, lat, lon)

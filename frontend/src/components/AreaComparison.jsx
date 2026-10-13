@@ -4,7 +4,7 @@ import { getRiskColor } from '../utils/riskCalculator';
 import { SRM_CAMPUS } from '../config/campus';
 import { getHeatmapData } from '../services/api';
 
-// Real, hand-curated SRM campus places (name + coordinates) — not mock data.
+// Real, hand-curated Tamil Nadu areas (name + coordinates) — not mock data.
 const CAMPUS_PLACES = SRM_CAMPUS.places;
 
 const haversineMeters = (lat1, lon1, lat2, lon2) => {

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { ArrowUpDown, Target, Loader2, X, Footprints, MapPin, ChevronRight } from 'lucide-react';
+import { ArrowUpDown, Loader2, X, Footprints, MapPin, ChevronRight } from 'lucide-react';
 import MapView from './MapView';
+import PlaceInput from './PlaceInput';
 import HeatProfileChart from './HeatProfileChart';
 import { SRM_CAMPUS, nearestPlaceName } from '../config/campus';
+import { formatDuration } from '../utils/time';
 import { getRiskColor } from '../utils/riskCalculator';
 
 const OPTIONS = [
@@ -12,7 +14,7 @@ const OPTIONS = [
 ];
 
 const placeLabel = (coords) => (coords ? nearestPlaceName(coords.lat, coords.lon) || 'Pinned point' : 'Not set');
-const minutes = (r) => Math.max(1, Math.round(r.duration_minutes));
+const minutes = (r) => formatDuration(r.duration_minutes);
 
 const RouteFinderView = ({
   startCoords,
@@ -48,16 +50,14 @@ const RouteFinderView = ({
   const samePath = comparison?.alternatives_available === false;
 
   const pinRow = (which, coords) => (
-    <div className={`journey-row ${placing === which ? 'placing' : ''}`}>
-      <span className={`journey-dot ${which}`} />
-      <button type="button" className="journey-place" onClick={() => setPlacing(which)} aria-pressed={placing === which}>
-        <small>{which === 'start' ? 'From' : 'To'}</small>
-        <span>{placeLabel(coords)}</span>
-      </button>
-      <button type="button" className="sky-icon-btn" onClick={() => onUseLocation(which)} title="Use my location" aria-label={`Use my location as ${which === 'start' ? 'start' : 'destination'}`}>
-        <Target size={13} />
-      </button>
-    </div>
+    <PlaceInput
+      which={which}
+      label={placeLabel(coords)}
+      active={placing === which}
+      onActivate={() => setPlacing(which)}
+      onPick={(c) => setPin(which, c)}
+      onUseLocation={() => onUseLocation(which)}
+    />
   );
 
   return (
@@ -76,13 +76,13 @@ const RouteFinderView = ({
           </button>
           {pinRow('end', endCoords)}
           <p className="journey-hint">
-            Tap the map to set the <strong>{placing === 'start' ? 'start' : 'destination'}</strong>. Drag either pin to adjust.
+            Type a place, tap the target for GPS, or tap the map to set the <strong>{placing === 'start' ? 'start' : 'destination'}</strong>. Drag either pin to adjust.
           </p>
         </section>
 
         {route && (
           <section className="route-hero" aria-live="polite">
-            <div className="route-hero-time">{minutes(route)}<span>min</span></div>
+            <div className="route-hero-time">{minutes(route)}</div>
             <div className="route-hero-meta">
               <span>{route.distance_km} km walk</span>
               <span>
@@ -108,7 +108,7 @@ const RouteFinderView = ({
                   onClick={() => onSelectRouteType(type)}
                 >
                   <strong>{label}{routesData.recommended_route === key && <em>Best</em>}</strong>
-                  <span>{minutes(r)} min · heat {r.average_heat_risk}</span>
+                  <span>{minutes(r)} · heat {r.average_heat_risk}</span>
                 </button>
               );
             })}
@@ -127,8 +127,8 @@ const RouteFinderView = ({
           </button>
         )}
 
-        <nav aria-label="Campus routes">
-          <h2 className="sky-section-title">Campus routes</h2>
+        <nav aria-label="Popular routes">
+          <h2 className="sky-section-title">Popular routes</h2>
           {SRM_CAMPUS.landmarks.map((preset) => (
             <button key={preset.name} type="button" className="sky-link" onClick={() => onSelectPreset(preset)}>
               <span>{preset.name.replace(/^SRM /, '')}</span>
@@ -176,7 +176,7 @@ const RouteFinderView = ({
         <div className="modal-backdrop-overlay" onClick={() => setShowDirections(false)}>
           <div className="report-modal-dialog nav-modal-box" role="dialog" aria-label="Directions" onClick={(e) => e.stopPropagation()}>
             <div className="report-modal-toolbar">
-              <span className="toolbar-title">{route.route_name} · {minutes(route)} min · {route.distance_km} km</span>
+              <span className="toolbar-title">{route.route_name} · {minutes(route)} · {route.distance_km} km</span>
               <button type="button" className="btn-modal-close" onClick={() => setShowDirections(false)} aria-label="Close">
                 <X size={20} />
               </button>
