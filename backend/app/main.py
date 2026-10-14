@@ -26,7 +26,20 @@ async def lifespan(app: FastAPI):
         init_db()
     except Exception as e:
         print(f"⚠️ Database initialization warning: {e}")
-    
+
+    # The build-time seed doesn't survive on Render (empty heat_data -> empty heatmap), so seed when empty.
+    try:
+        from app.database.connection import SessionLocal
+        from app.database.models import HeatData
+        with SessionLocal() as db:
+            empty = db.query(HeatData).count() == 0
+        if empty:
+            sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts")))
+            from seed_heat_data import seed_database
+            seed_database()
+    except Exception as e:
+        print(f"⚠️ Startup seeding failed: {e}")
+
     # Load ML Model once at startup
     ml_service.load_model()
 
